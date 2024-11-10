@@ -4,16 +4,29 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import os
-from rclpy.parameter import Parameter
 from time import sleep
 
 
 class ImagePublisherNode(Node):
-    def __init__(self, name, image_dir):
+    def __init__(self, name):
         super().__init__(name)
-        self.image_dir = image_dir
+        
+        # Declare and get the parameter for image directory
+        self.declare_parameter('image_dir', '')
+        self.image_dir = self.get_parameter('image_dir').get_parameter_value().string_value
+        
+        if not self.image_dir:
+            self.get_logger().error("No image directory provided.")
+            rclpy.shutdown()
+            return
+
         self.bridge = CvBridge()
-        self.publisher = self.create_publisher(Image, 'camera/image', 10)
+
+        topic_name = f"{self.get_name()}/image"
+
+        self.get_logger().info(f'topic name: {topic_name}')
+
+        self.publisher = self.create_publisher(Image, topic_name, 10)
         
         # Get all image files from the directory
         self.image_files = [f for f in os.listdir(self.image_dir) if f.endswith('.png') or f.endswith('.jpg')]
@@ -21,9 +34,11 @@ class ImagePublisherNode(Node):
         
         # Create a timer to publish images every 0.1s
         self.timer = self.create_timer(0.1, self.publish_image)
+        self.image_index = 0  # Track the current image index for sequential publishing
 
     def publish_image(self):
-        for image_file in self.image_files:
+        if self.image_index < len(self.image_files):
+            image_file = self.image_files[self.image_index]
             image_path = os.path.join(self.image_dir, image_file)
             cv_image = cv2.imread(image_path)
             if cv_image is not None:
@@ -32,32 +47,23 @@ class ImagePublisherNode(Node):
                 self.publisher.publish(ros_image)
                 self.get_logger().info(f'Publishing image: {image_file}')
                 sleep(0.1)  # Control the rate of publishing (10 FPS)
+            self.image_index += 1
+        else:
+            self.get_logger().info('All images have been published.')
+            rclpy.shutdown()  # Stop the node once all images have been published
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    # Define image directories for multiple nodes
-    image_dirs = [
-        '/home/moskit/dtu/perception_final_project_ws/data/34759_final_project_rect/seq_01/image_02/data',
-        # Add more paths if needed
-    ]
-
-    nodes = []
-    for i, image_dir in enumerate(image_dirs):
-        node = ImagePublisherNode(f'image_publisher_{i}', image_dir)
-        nodes.append(node)
+    node = ImagePublisherNode('image_publisher_node')
 
     try:
-        # Spin all nodes
-        rclpy.spin(nodes[0])  # This will spin the first node and block execution
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        # Clean up and shut down nodes
-        for node in nodes:
-            node.destroy_node()
-
+        node.destroy_node()
         rclpy.shutdown()
 
 
