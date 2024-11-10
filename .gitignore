@@ -1,0 +1,10 @@
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
