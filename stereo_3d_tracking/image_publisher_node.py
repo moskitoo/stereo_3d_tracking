@@ -22,7 +22,8 @@ class ImagePublisherNode(Node):
 
         self.bridge = CvBridge()
 
-        topic_name = f"{self.get_name()}/image"
+        # topic_name = f"{self.get_name()}/image"
+        topic_name = f"{self.get_name()}/image_rect"
 
         self.get_logger().info(f'topic name: {topic_name}')
 

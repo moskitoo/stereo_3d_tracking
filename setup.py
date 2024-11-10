@@ -9,10 +9,11 @@ setup(
     install_requires=['setuptools', 'opencv-python', 'cv-bridge'],
     data_files=[],
     entry_points={
-        'console_scripts': [
-            'image_publisher_node = stereo_3d_tracking.frame_publisher:main',
-        ],
+    'console_scripts': [
+        'image_publisher_node = stereo_3d_tracking.image_publisher_node:main',
+        'calibration_publisher_node = stereo_3d_tracking.calibration_publisher_node:main'
+    ],
     },
-    script_dir='scripts',  # Example if you have custom scripts to install
-    install_scripts='scripts',  # Example if you are installing scripts
+    script_dir='scripts',
+    install_scripts='scripts',
 )
