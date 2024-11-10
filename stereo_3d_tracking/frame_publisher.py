@@ -50,20 +50,6 @@ class ImagePublisherNode(Node):
             self.image_index += 1
             if self.image_index == len(self.image_files):
                 self.image_index = 0
-        # if self.image_index < len(self.image_files):
-        #     image_file = self.image_files[self.image_index]
-        #     image_path = os.path.join(self.image_dir, image_file)
-        #     cv_image = cv2.imread(image_path)
-        #     if cv_image is not None:
-        #         # Convert to ROS Image message
-        #         ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
-        #         self.publisher.publish(ros_image)
-        #         self.get_logger().info(f'Publishing image: {image_file}')
-        #         sleep(0.1)  # Control the rate of publishing (10 FPS)
-        #     self.image_index += 1
-        # else:
-        #     self.get_logger().info('All images have been published.')
-        #     rclpy.shutdown()  # Stop the node once all images have been published
 
 
 def main(args=None):
