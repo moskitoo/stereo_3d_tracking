@@ -2,24 +2,29 @@ import cv2
 import pandas as pd
 import os
 
-# Directories for frames and labels
-frames_dir_1 = "data/34759_final_project_rect/seq_01/image_02/data"
-frames_dir_2 = "data/34759_final_project_rect/seq_02/image_02/data"
-frames_dir_3 = "data/34759_final_project_rect/seq_03/image_02/data"
-labels_path_1 = "data/34759_final_project_rect/seq_01/labels.txt"
-labels_path_2 = "data/34759_final_project_rect/seq_02/labels.txt"
-labels_path_3 = "data/34759_final_project_rect/seq_03/labels.txt"
+# Define directories for frames and labels (only seq_1 and seq_2)
+frames_dir = {
+    (1, 2): "data/34759_final_project_rect/seq_01/image_02/data",
+    (1, 3): "data/34759_final_project_rect/seq_01/image_03/data",
+    (2, 2): "data/34759_final_project_rect/seq_02/image_02/data",
+    (2, 3): "data/34759_final_project_rect/seq_02/image_03/data"
+}
+
+labels_paths = {
+    1: "data/34759_final_project_rect/seq_01/labels.txt",
+    2: "data/34759_final_project_rect/seq_02/labels.txt"
+}
 
 # Function to generate the correct image filename based on sequence
 def get_frame_filename(frame_number, seq_num):
     if seq_num == 1:
         return f"{frame_number:06}.png"  # 6-digit filenames for seq_01
-    elif seq_num == 2 or seq_num == 3:
-        return f"{frame_number:010}.png"  # 10-digit filenames for seq_02 and seq_03
+    elif seq_num == 2:
+        return f"{frame_number:010}.png"  # 10-digit filenames for seq_02
     else:
         raise ValueError("Invalid sequence number")
 
-# Read the labels for both sequences
+# Read and sort labels for each sequence
 def read_labels(labels_path):
     column_names = [
         "frame", "track_id", "type", "truncated", "occluded", "alpha",
@@ -27,14 +32,10 @@ def read_labels(labels_path):
         "dim_height", "dim_width", "dim_length",
         "loc_x", "loc_y", "loc_z", "rotation_y", "score"
     ]
-    return pd.read_csv(labels_path, sep=" ", names=column_names)
+    return pd.read_csv(labels_path, sep=" ", names=column_names).sort_values("frame")
 
-# Load and sort labels
-labels_1 = read_labels(labels_path_1).sort_values("frame")
-labels_2 = read_labels(labels_path_2).sort_values("frame")
-
-labels = [labels_1, labels_2]
-frames_dir = [frames_dir_1, frames_dir_2]
+# Load labels for each sequence
+labels = {seq_num: read_labels(path) for seq_num, path in labels_paths.items()}
 
 # Define colors for each class (Car, Pedestrian, Cyclist)
 color_map = {
@@ -43,20 +44,30 @@ color_map = {
     "Cyclist": (255, 0, 0)     # Blue for Cyclist
 }
 
-def visualize_frame(frame_number, seq_num):
-    # Initialize the video window
-    cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
-    seq_labels = labels[seq_num - 1]
+# Function to retrieve the frame image
+def get_frame(frame_number, seq_num, camera):
     frame_filename = get_frame_filename(frame_number, seq_num)
-    frame_path = os.path.join(frames_dir[seq_num - 1], frame_filename)
+    frame_path = os.path.join(frames_dir[(seq_num, camera)], frame_filename)
     frame = cv2.imread(frame_path)
     
     if frame is None:
-        print(f"Frame {frame_path} not found.")
-        return
+        raise FileNotFoundError(f"Frame {frame_path} not found.")
     
-    # Filter labels for the current frame
+    return frame
+
+# Function to retrieve bounding boxes for the specified frame
+def get_bboxes(frame_number, seq_num):
+    seq_labels = labels[seq_num]
     frame_labels = seq_labels[seq_labels["frame"] == frame_number]
+    return frame_labels
+
+def visualize_frame(frame_number, seq_num, camera=2):
+    # Initialize the video window
+    cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
+    
+    # Get frame and bounding boxes separately
+    frame = get_frame(frame_number, seq_num, camera)
+    frame_labels = get_bboxes(frame_number, seq_num)
     
     # Draw each bounding box on the frame
     draw_bboxes(frame, frame_labels)
@@ -83,4 +94,5 @@ def draw_bboxes(frame, frame_labels):
 
 # Run the visualization when the script is executed directly
 if __name__ == "__main__":
-    visualize_frame(frame_number=5, seq_num=1)
+    # Example usage: visualize a frame from sequence 1, camera 2
+    visualize_frame(frame_number=50, seq_num=1, camera=2)
