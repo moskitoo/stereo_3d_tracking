@@ -55,42 +55,50 @@ def get_frame(frame_number, seq_num, camera):
     
     return frame
 
-# Function to retrieve bounding boxes for the specified frame
-def get_bboxes(frame_number, seq_num):
+# Function to retrieve bounding boxes and labels for the specified frame
+def get_detection_results(frame_number, seq_num):
     seq_labels = labels[seq_num]
     frame_labels = seq_labels[seq_labels["frame"] == frame_number]
-    return frame_labels
 
+    # Extract columns 'bbox_left', 'bbox_top', 'bbox_right', 'bbox_bottom' as a NumPy array
+    bboxes = frame_labels[['bbox_left', 'bbox_top', 'bbox_right', 'bbox_bottom']].to_numpy()
+    
+    # Extract 'type' column as a NumPy array
+    obj_types = frame_labels['type'].to_numpy()
+    
+    return bboxes, obj_types
+
+# Function to visualize the frame with bounding boxes
 def visualize_frame(frame_number, seq_num, camera=2):
     # Initialize the video window
     cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
     
     # Get frame and bounding boxes separately
     frame = get_frame(frame_number, seq_num, camera)
-    frame_labels = get_bboxes(frame_number, seq_num)
+    bboxes, labels = get_detection_results(frame_number, seq_num)
     
     # Draw each bounding box on the frame
-    draw_bboxes(frame, frame_labels)
+    draw_bboxes(frame, bboxes, labels, color_map)
     
     # Display the frame in a single window
     cv2.imshow("Video", frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-def draw_bboxes(frame, frame_labels):
-    for _, row in frame_labels.iterrows():
-        bbox_left, bbox_top = int(row["bbox_left"]), int(row["bbox_top"])
-        bbox_right, bbox_bottom = int(row["bbox_right"]), int(row["bbox_bottom"])
-        obj_type = row["type"]
+# Function to draw bounding boxes on the frame
+def draw_bboxes(frame, bboxes, obj_types, color_map):
+    for i, bbox in enumerate(bboxes):
+        bbox_left, bbox_top, bbox_right, bbox_bottom = bbox
+        obj_type = obj_types[i]  # Access the object type directly from the obj_types array
         
         # Choose color based on object type
         color = color_map.get(obj_type, (255, 255, 255))  # Default to white if unknown type
         
         # Draw bounding box with the selected color
-        cv2.rectangle(frame, (bbox_left, bbox_top), (bbox_right, bbox_bottom), color, 2)
+        cv2.rectangle(frame, (int(bbox_left), int(bbox_top)), (int(bbox_right), int(bbox_bottom)), color, 2)
         
         # Annotate with object type
-        cv2.putText(frame, obj_type, (bbox_left, bbox_top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(frame, obj_type, (int(bbox_left), int(bbox_top) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
 # Run the visualization when the script is executed directly
 if __name__ == "__main__":
