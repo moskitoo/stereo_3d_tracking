@@ -33,8 +33,6 @@ class TrackedObject:
 def filter_features(frame, detection_output, features, descriptors):
     object_container = []
     bboxes = detection_output[0]
-    
-    bboxes_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
 
     features_sorted = sorted(features, key=lambda k: k.response, reverse=True)
 
@@ -51,6 +49,9 @@ def filter_features(frame, detection_output, features, descriptors):
             if x > bbox_left and x < bbox_right and y > bbox_top and y < bbox_bottom:
                 object_features.append(feature)
                 features_sorted = features_sorted[1:]
+
+                # features have to be filtered to be sure that they represent only objects not background!
+                # its quite often that bounding box is bigger than the object and a lot of background features are passed
 
         position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
         
