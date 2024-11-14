@@ -12,7 +12,8 @@ BboxFeatureRoi = [1.0, 1.0]
 class TrackedObject:
     def __init__(self, type, position, bbox, features, descriptors, color):
         self.type = type
-        self.position = position
+        self.position = [position]
+        self.position_qty = 0
         self.bbox = bbox
         self.features = features
         self.descriptors = descriptors
@@ -24,8 +25,17 @@ class TrackedObject:
     def update_state(self, features, descriptors, position, bbox):
         self.features = features
         self.descriptors = descriptors  # not used in this approach
-        self.position = position
+        self.position.append(position)
         self.bbox = bbox
+    
+    def update_position_qty(self):
+        self.position_qty = len(self.position)
+    
+    def check_position_qty(self):
+        if self.position_qty == len(self.position):
+            return False
+        else:
+            True
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -217,10 +227,6 @@ def filter_features_optical_flow(
     minimal_object_features = 5
     max_distance = 50
     matching_quality = 0.75  # default = 0.75
-    bbox_feature_roi = [
-        1,
-        1,
-    ]  # what part of the width and height aroung the center of the bounding box has to be considered
 
     # Sort feature-descriptor pairs by response in descending order
     feature_descriptor_pairs = sorted(
@@ -231,7 +237,9 @@ def filter_features_optical_flow(
         bbox_left, bbox_top, bbox_right, bbox_bottom = map(int, bbox)
         bbox_obj = BoundingBox(bbox_left, bbox_top, bbox_right, bbox_bottom)
 
-        filtered_features, filtered_descriptors = bbox_obj.filter_features(feature_descriptor_pairs)
+        filtered_result = bbox_obj.filter_features(feature_descriptor_pairs)
+        if filtered_result:
+            filtered_features, filtered_descriptors = filtered_result
 
         # State 1: If no objects exist, create the first one
         if not object_container:
@@ -261,7 +269,7 @@ def filter_features_optical_flow(
                 ):
                     obj.update_state(matched_features, filtered_descriptors, bbox_obj.position, bbox_obj)
                     matched_any = True
-                    print("matched")
+                    # print("matched")
                     break
 
         # State 3: No matches found with any existing objects, so create a new one
@@ -276,7 +284,7 @@ def filter_features_optical_flow(
                     get_rand_color(),
                 )
             )
-            print("no object found")
+            # print("no object found")
 
     return object_container
 
@@ -338,55 +346,76 @@ object_container = []
 frame_1_prev = None
 
 # Loop through all frames in the sequence
-while True:
-    for frame_number in range(frame_start, frame_end + 1):
-        if frame_1_prev is not None:
-            start = time.time()
-            frame_1 = get_frame(frame_number, sequence_number, 2)
-            # frame_2 = get_frame(frame_number, sequence_number, 3)
-            detection_output = get_detection_results(frame_number, sequence_number)
+# while True:
+frame_counter = 0
+for frame_number in range(frame_start, frame_end + 1):
+    if frame_1_prev is not None:
+        start = time.time()
+        frame_1 = get_frame(frame_number, sequence_number, 2)
+        # frame_2 = get_frame(frame_number, sequence_number, 3)
+        detection_output = get_detection_results(frame_number, sequence_number)
 
-            masked_frame_1 = get_masked_image(frame_1, detection_output)
+        frame_1_prev_gray = cv2.cvtColor(frame_1_prev, cv2.COLOR_BGR2GRAY)
+        # frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
 
-            frame_1_gray = cv2.cvtColor(masked_frame_1, cv2.COLOR_BGR2GRAY)
-            frame_1_prev_gray = cv2.cvtColor(frame_1_prev, cv2.COLOR_BGR2GRAY)
-            # frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
+        masked_frame_1 = get_masked_image(frame_1, detection_output)
+        frame_1_gray = cv2.cvtColor(masked_frame_1, cv2.COLOR_BGR2GRAY)
 
-            # Detect features in both frames
-            kp1, des = sift.detectAndCompute(frame_1_gray, None)
-            # kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
+        # Detect features in both frames
+        kp1, des = sift.detectAndCompute(frame_1_gray, None)
+        # kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
-            # Filter features based on detection output
-            # tracked_objects = filter_features(frame_1, detection_output, kp1, des, object_container)
-            tracked_objects = filter_features_optical_flow(frame_1_gray, frame_1_prev_gray, detection_output, kp1, des, object_container)
+        # Filter features based on detection output
+        # tracked_objects = filter_features(frame_1, detection_output, kp1, des, object_container)
+        tracked_objects = filter_features_optical_flow(frame_1_gray, frame_1_prev_gray, detection_output, kp1, des, object_container)
 
-            # print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
+        # print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
 
-            # # Visualize tracked objects and all features
-            frame_with_objects, all_features_frame = visualize_objects(
-                frame_1, tracked_objects
-            )
+        # # Visualize tracked objects and all features
+        frame_with_objects, all_features_frame = visualize_objects(
+            frame_1, tracked_objects
+        )
 
-            time_diff = time.time() - start
-            print(f"time: {time_diff}")
+        time_diff = time.time() - start
+        # print(f"time: {time_diff}")
 
-            # Show frames
-            cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
-            cv2.imshow("Frame with Masked Image", masked_frame_1)
+        frame_counter += 1
+        if frame_counter % 2 == 0:
+            # tracked_objects = [obj if obj.check_position_qty() else obj.update_position_qty() for obj in tracked_objects]
+            # print("check")
+            object_to_keep = []
+            for i, tracked_object in enumerate(tracked_objects):
+                if not tracked_object.check_position_qty():
+                    object_to_keep.append(tracked_object)
+                    tracked_object.update_position_qty()
+                    print("keep")
+                else:
+                    print("removed")
+            
+            tracked_objects = object_to_keep
+        
 
-            cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-            cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+        # Show frames
+        cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
+        cv2.imshow("Frame with Masked Image", masked_frame_1)
 
-            cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-            cv2.imshow("All Features", all_features_frame)
+        cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+        cv2.imshow("Frame with Tracked Objects", frame_with_objects)
 
-            # Wait for a key press for a short period to create a video effect
-            if cv2.waitKey(1) & 0xFF == ord("q"):  # Press 'q' to quit
-                break
-        frame_1_prev = get_frame(frame_number, sequence_number, 2)
+        cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+        cv2.imshow("All Features", all_features_frame)
+
+        # Wait for a key press for a short period to create a video effect
+        if cv2.waitKey(1) & 0xFF == ord("q"):  # Press 'q' to quit
+            break
+    frame_1_prev = get_frame(frame_number, sequence_number, 2)
 
 # Close all windows
 cv2.destroyAllWindows()
+
+print(object_container)
+
+print("test")
 
 
 # frame_number = 10
