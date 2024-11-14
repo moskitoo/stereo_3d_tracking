@@ -1,22 +1,7 @@
 import cv2
 import numpy as np
 import random
-
 from frame_manager import *
-
-frame_number = 50
-sequence_number = 1
-
-frame_1 = get_frame(frame_number, sequence_number, 2)
-frame_2 = get_frame(frame_number, sequence_number, 3)
-detection_output = get_detection_results(frame_number, sequence_number)
-
-frame_1_gray = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
-frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
-
-sift = cv2.SIFT_create()
-kp1, des = sift.detectAndCompute(frame_1_gray, None)
-kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, color):
@@ -86,21 +71,77 @@ def visualize_objects(frame, tracked_objects):
     return frame_copy, frame_features
 
 
-tracked_objects = filter_features(frame_1, detection_output, kp1, des)
+# frame_number = 10
+# sequence_number = 1
 
-print(f"tracked objects: {len(tracked_objects)}")
+# frame_1 = get_frame(frame_number, sequence_number, 2)
+# frame_2 = get_frame(frame_number, sequence_number, 3)
+# detection_output = get_detection_results(frame_number, sequence_number)
 
-frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
+# frame_1_gray = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
+# frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
 
-# Show frames
-cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+# sift = cv2.SIFT_create()
+# kp1, des = sift.detectAndCompute(frame_1_gray, None)
+# kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
-cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-cv2.imshow("All Features", all_features_frame)
+# tracked_objects = filter_features(frame_1, detection_output, kp1, des)
 
-cv2.waitKey(0)
+# print(f"tracked objects: {len(tracked_objects)}")
+
+# frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
+
+# # Show frames
+# cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+# cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+
+# cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+# cv2.imshow("All Features", all_features_frame)
+
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+
+frame_start = 1  # Start frame number
+frame_end = 140  # End frame number
+sequence_number = 1  # Sequence number
+
+# Initialize SIFT detector
+sift = cv2.SIFT_create()
+
+# Loop through all frames in the sequence
+for frame_number in range(frame_start, frame_end + 1):
+    frame_1 = get_frame(frame_number, sequence_number, 2)
+    frame_2 = get_frame(frame_number, sequence_number, 3)
+    detection_output = get_detection_results(frame_number, sequence_number)
+
+    frame_1_gray = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
+    frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
+
+    # Detect features in both frames
+    kp1, des = sift.detectAndCompute(frame_1_gray, None)
+    kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
+
+    # Filter features based on detection output
+    tracked_objects = filter_features(frame_1, detection_output, kp1, des)
+
+    print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
+
+    # Visualize tracked objects and all features
+    frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
+
+    # Show frames
+    cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+    cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+
+    cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+    cv2.imshow("All Features", all_features_frame)
+
+    # Wait for a key press for a short period to create a video effect
+    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
+        break
+
+# Close all windows
 cv2.destroyAllWindows()
-
 
 
