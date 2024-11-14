@@ -8,12 +8,13 @@ import time
 K = 2
 
 class TrackedObject:
-    def __init__(self, type, position, bbox, features, k_features, color):
+    def __init__(self, type, position, bbox, features, descriptors, color):
         self.type = type
         self.position = position
         self.bbox = bbox
-        self.features = features
-        self.k_features = k_features
+        self.features = features # list of features in basic version len of 2 to store 
+        self.descriptors = descriptors
+        # self.k_features = k_features
         self.color = color
         # previous features
 
@@ -21,34 +22,50 @@ class TrackedObject:
         return object.__getattribute__(self, name)
 
 
-def filter_features(frame, detection_output, features, descriptors):
-    object_container = []
+def filter_features(frame, detection_output, features, descriptors, object_container):
+    # object_container = []
     bboxes = detection_output[0]
 
-    features_sorted = sorted(features, key=lambda k: k.response, reverse=True)
+    feature_descriptor_pairs = sorted(zip(features, descriptors), key=lambda x: x[0].response, reverse=True)
 
     for bbox in bboxes:
         [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
         bbox_left, bbox_top = int(bbox_left), int(bbox_top)
         bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
 
-        object_features = []
+        bbox_features = []
+        bbox_descriptors = []
 
-        for feature in features_sorted:
-            x, y = feature.pt[0], feature.pt[1]
+        unassigned_pairs = []
 
-            if x > bbox_left and x < bbox_right and y > bbox_top and y < bbox_bottom:
-                object_features.append(feature)
-                features_sorted = features_sorted[1:]
+        for feature, descriptor in feature_descriptor_pairs:
+            x, y = feature.pt
+
+            if bbox_left < x < bbox_right and bbox_top < y < bbox_bottom:
+                bbox_features.append(feature)
+                bbox_descriptors.append(descriptor)
+            else:
+                unassigned_pairs.append((feature, descriptor))
 
                 # features have to be filtered to be sure that they represent only objects not background!
                 # its quite often that bounding box is bigger than the object and a lot of background features are passed
 
-        position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
-        
-        color = tuple(random.randint(0, 255) for _ in range(3))
+        # if len(object_container) > 0:
+        #     for obj in object_container:
+        #         # match features
+        #         object_features = obj.features
 
-        object_container.append(TrackedObject(detection_output[1], position, bbox, object_features, K, color))
+        #         bf = cv2.BFMatcher()
+        #         # matches = bf.match(des, des2)
+                
+        # else:
+        #     position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
+        #     color = tuple(random.randint(0, 255) for _ in range(3))
+        #     object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, color))
+        
+        position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
+        color = tuple(random.randint(0, 255) for _ in range(3))
+        object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, color))
     
     return object_container
 
@@ -131,6 +148,8 @@ sequence_number = 1  # Sequence number
 # Initialize SIFT detector
 sift = cv2.SIFT_create()
 
+object_container = []
+
 # Loop through all frames in the sequence
 for frame_number in range(frame_start, frame_end + 1):
     start = time.time()
@@ -148,7 +167,7 @@ for frame_number in range(frame_start, frame_end + 1):
     # kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
     # Filter features based on detection output
-    tracked_objects = filter_features(frame_1, detection_output, kp1, des)
+    tracked_objects = filter_features(frame_1, detection_output, kp1, des, object_container)
 
     # print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
 
