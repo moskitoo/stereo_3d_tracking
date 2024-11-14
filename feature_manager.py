@@ -22,6 +22,10 @@ class TrackedObject:
         return object.__getattribute__(self, name)
 
 def filter_features(frame, detection_output, features, descriptors, object_container):
+    minimal_object_features = 15
+    matching_quality = 0.75 # default = 0.75
+    bbox_feature_roi = [1, 1] # what part of the width and height aroung the center of the bounding box has to be considered
+
     bboxes = detection_output[0]
 
     # Sort feature-descriptor pairs by response in descending order
@@ -29,13 +33,20 @@ def filter_features(frame, detection_output, features, descriptors, object_conta
 
     for bbox in bboxes:
         bbox_left, bbox_top, bbox_right, bbox_bottom = map(int, bbox)
+        bbox_width = bbox_right - bbox_left
+        bbox_height = bbox_bottom - bbox_top
         bbox_features = []
         bbox_descriptors = []
+
+        left_roi = -bbox_width * bbox_feature_roi[0] / 2 + bbox_left + 0.5 * bbox_width
+        right_roi = bbox_width * bbox_feature_roi[0] / 2 + bbox_right - 0.5 * bbox_width
+        top_roi = -bbox_height * bbox_feature_roi[1] / 2 + bbox_top + 0.5 * bbox_height
+        bottom_roi = bbox_height * bbox_feature_roi[1] / 2 + bbox_bottom - 0.5 * bbox_height
 
         # Separate features inside and outside of the bounding box
         for feature, descriptor in feature_descriptor_pairs:
             x, y = feature.pt
-            if bbox_left < x < bbox_right and bbox_top < y < bbox_bottom:
+            if left_roi < x < right_roi and top_roi < y < bottom_roi:
                 bbox_features.append(feature)
                 bbox_descriptors.append(descriptor)
 
@@ -71,19 +82,19 @@ def filter_features(frame, detection_output, features, descriptors, object_conta
                 matched_features = []
                 matched_descriptors = []
                 for m, n in matches:
-                    if m.distance < 0.75 * n.distance:
+                    if m.distance < matching_quality * n.distance:
                         matched_features.append(bbox_features[m.trainIdx])
                         matched_descriptors.append(bbox_descriptors[m.trainIdx])
 
                 # If matches were found, update the object and mark as matched
-                if matched_features:
+                if len(matched_features) > minimal_object_features:
                     obj.features = matched_features
                     obj.descriptors = matched_descriptors
                     matched_any = True
                     break
 
         # State 3: No matches found with any existing objects, so create a new one
-        if not matched_any:
+        if not matched_any and len(bbox_descriptors) > minimal_object_features:
             position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
             color = tuple(random.randint(0, 255) for _ in range(3))
             object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, bbox_descriptors, color))
