@@ -4,12 +4,16 @@ import random
 from frame_manager import *
 import time
 
+
+K = 2
+
 class TrackedObject:
-    def __init__(self, type, position, bbox, features, color):
+    def __init__(self, type, position, bbox, features, k_features, color):
         self.type = type
         self.position = position
         self.bbox = bbox
         self.features = features
+        self.k_features = k_features
         self.color = color
         # previous features
 
@@ -44,9 +48,23 @@ def filter_features(frame, detection_output, features, descriptors):
         
         color = tuple(random.randint(0, 255) for _ in range(3))
 
-        object_container.append(TrackedObject(detection_output[1], position, bbox, object_features, color))
+        object_container.append(TrackedObject(detection_output[1], position, bbox, object_features, K, color))
     
     return object_container
+
+def get_masked_image(frame, detection_output):
+    bboxes = detection_output[0]
+
+    masked_frame = np.zeros(frame.shape[:2])
+
+    for bbox in bboxes:
+        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
+        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
+        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
+
+        masked_frame[bbox_top:bbox_bottom, bbox_left:bbox_right] = 1
+        
+    return masked_frame
 
 def calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom):
     x = (bbox_left + bbox_right) / 2
@@ -126,22 +144,25 @@ for frame_number in range(frame_start, frame_end + 1):
     # kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
     # Filter features based on detection output
-    tracked_objects = filter_features(frame_1, detection_output, kp1, des)
+    # tracked_objects = filter_features(frame_1, detection_output, kp1, des)
+    masked_frame = get_masked_image(frame_1, detection_output)
 
-    print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
+    # print(f"Tracked objects in frame {frame_number}: {len(tracked_objects)}")
 
-    # Visualize tracked objects and all features
-    frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
+    # # Visualize tracked objects and all features
+    # frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
 
     time_diff = time.time() - start
     print(f"time: {time_diff}")
 
     # Show frames
     cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-    cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+    cv2.imshow("Frame with Tracked Objects", masked_frame)
+    # cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+    # cv2.imshow("Frame with Tracked Objects", frame_with_objects)
 
-    cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-    cv2.imshow("All Features", all_features_frame)
+    # cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+    # cv2.imshow("All Features", all_features_frame)
 
     # Wait for a key press for a short period to create a video effect
     if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
