@@ -21,53 +21,75 @@ class TrackedObject:
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
 
-
 def filter_features(frame, detection_output, features, descriptors, object_container):
-    # object_container = []
     bboxes = detection_output[0]
 
+    # Sort feature-descriptor pairs by response in descending order
     feature_descriptor_pairs = sorted(zip(features, descriptors), key=lambda x: x[0].response, reverse=True)
 
     for bbox in bboxes:
-        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
-        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
-        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
-
+        bbox_left, bbox_top, bbox_right, bbox_bottom = map(int, bbox)
         bbox_features = []
         bbox_descriptors = []
 
-        unassigned_pairs = []
-
+        # Separate features inside and outside of the bounding box
         for feature, descriptor in feature_descriptor_pairs:
             x, y = feature.pt
-
             if bbox_left < x < bbox_right and bbox_top < y < bbox_bottom:
                 bbox_features.append(feature)
                 bbox_descriptors.append(descriptor)
-            else:
-                unassigned_pairs.append((feature, descriptor))
 
-                # features have to be filtered to be sure that they represent only objects not background!
-                # its quite often that bounding box is bigger than the object and a lot of background features are passed
+        # Skip processing if there are no descriptors in the bounding box
+        if not bbox_descriptors:
+            continue
 
-        # if len(object_container) > 0:
-        #     for obj in object_container:
-        #         # match features
-        #         object_features = obj.features
+        # Convert bbox_descriptors to a numpy array
+        bbox_descriptors = np.array(bbox_descriptors)
 
-        #         bf = cv2.BFMatcher()
-        #         # matches = bf.match(des, des2)
-                
-        # else:
-        #     position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
-        #     color = tuple(random.randint(0, 255) for _ in range(3))
-        #     object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, color))
-        
-        position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
-        color = tuple(random.randint(0, 255) for _ in range(3))
-        object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, color))
-    
+        # State 1: If no objects exist, create the first one
+        if not object_container:
+            position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
+            color = tuple(random.randint(0, 255) for _ in range(3))
+            object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, bbox_descriptors, color))
+            continue
+
+        # State 2: Try to match with existing objects
+        matched_any = False
+        bf = cv2.BFMatcher()
+        for obj in object_container:
+            object_descriptors = obj.descriptors
+
+            # Ensure descriptors are numpy arrays and not empty
+            if isinstance(object_descriptors, list):
+                object_descriptors = np.array(object_descriptors)
+
+            if object_descriptors is not None and len(object_descriptors) > 0:
+                # Perform knnMatch
+                matches = bf.knnMatch(object_descriptors, bbox_descriptors, k=2)
+
+                # Apply Lowe's ratio test to find good matches
+                matched_features = []
+                matched_descriptors = []
+                for m, n in matches:
+                    if m.distance < 0.75 * n.distance:
+                        matched_features.append(bbox_features[m.trainIdx])
+                        matched_descriptors.append(bbox_descriptors[m.trainIdx])
+
+                # If matches were found, update the object and mark as matched
+                if matched_features:
+                    obj.features = matched_features
+                    obj.descriptors = matched_descriptors
+                    matched_any = True
+                    break
+
+        # State 3: No matches found with any existing objects, so create a new one
+        if not matched_any:
+            position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
+            color = tuple(random.randint(0, 255) for _ in range(3))
+            object_container.append(TrackedObject(detection_output[1], position, bbox, bbox_features, bbox_descriptors, color))
+
     return object_container
+
 
 def get_masked_image(frame, detection_output):
     bboxes = detection_output[0]
