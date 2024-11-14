@@ -159,14 +159,14 @@ for frame_number in range(frame_start, frame_end + 1):
     print(f"time: {time_diff}")
 
     # Show frames
+    cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
+    cv2.imshow("Frame with Masked Image", masked_frame_1)
+
     cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-    cv2.imshow("Frame with Tracked Objects", masked_frame_1)
+    cv2.imshow("Frame with Tracked Objects", frame_with_objects)
 
-    # cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-    # cv2.imshow("Frame with Tracked Objects", frame_with_objects)
-
-    # cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-    # cv2.imshow("All Features", all_features_frame)
+    cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+    cv2.imshow("All Features", all_features_frame)
 
     # Wait for a key press for a short period to create a video effect
     if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
