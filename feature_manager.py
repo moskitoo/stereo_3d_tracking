@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import random
 from frame_manager import *
+import time
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, color):
@@ -10,6 +11,7 @@ class TrackedObject:
         self.bbox = bbox
         self.features = features
         self.color = color
+        # previous features
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
@@ -111,16 +113,17 @@ sift = cv2.SIFT_create()
 
 # Loop through all frames in the sequence
 for frame_number in range(frame_start, frame_end + 1):
+    start = time.time()
     frame_1 = get_frame(frame_number, sequence_number, 2)
-    frame_2 = get_frame(frame_number, sequence_number, 3)
+    # frame_2 = get_frame(frame_number, sequence_number, 3)
     detection_output = get_detection_results(frame_number, sequence_number)
 
     frame_1_gray = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
-    frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
+    # frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
 
     # Detect features in both frames
     kp1, des = sift.detectAndCompute(frame_1_gray, None)
-    kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
+    # kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
     # Filter features based on detection output
     tracked_objects = filter_features(frame_1, detection_output, kp1, des)
@@ -129,6 +132,9 @@ for frame_number in range(frame_start, frame_end + 1):
 
     # Visualize tracked objects and all features
     frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
+
+    time_diff = time.time() - start
+    print(f"time: {time_diff}")
 
     # Show frames
     cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
