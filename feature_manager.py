@@ -1,6 +1,6 @@
 import cv2
-import pandas as pd
 import numpy as np
+import random
 
 from frame_manager import *
 
@@ -14,42 +14,24 @@ detection_output = get_detection_results(frame_number, sequence_number)
 frame_1_gray = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
 frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
 
-
 sift = cv2.SIFT_create()
 kp1, des = sift.detectAndCompute(frame_1_gray, None)
 kp2, des2 = sift.detectAndCompute(frame_2_gray, None)
 
-
-object_container = []
-
-'''
-object
-
-type
-pedestrian
-car
-cyclist
-
-keypoints
-
-2d position
-
-'''
 class TrackedObject:
-    def __init__(self, type, position, bbox, features):
+    def __init__(self, type, position, bbox, features, color):
         self.type = type
         self.position = position
         self.bbox = bbox
         self.features = features
+        self.color = color
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
-        
-
-
 
 
 def filter_features(frame, detection_output, features, descriptors):
+    object_container = []
     bboxes = detection_output[0]
     
     bboxes_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
@@ -57,9 +39,6 @@ def filter_features(frame, detection_output, features, descriptors):
     features_sorted = sorted(features, key=lambda k: k.response, reverse=True)
 
     for bbox in bboxes:
-
-        # maybe sort detections by score and then remove features?
-
         [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
         bbox_left, bbox_top = int(bbox_left), int(bbox_top)
         bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
@@ -69,13 +48,15 @@ def filter_features(frame, detection_output, features, descriptors):
         for feature in features_sorted:
             x, y = feature.pt[0], feature.pt[1]
 
-            if x > bbox_top and x < bbox_bottom and y > bbox_top and y < bbox_right:
+            if x > bbox_left and x < bbox_right and y > bbox_top and y < bbox_bottom:
                 object_features.append(feature)
                 features_sorted = features_sorted[1:]
 
         position = calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom)
+        
+        color = tuple(random.randint(0, 255) for _ in range(3))
 
-        object_container.append(TrackedObject(detection_output[1], position, bbox, object_features))
+        object_container.append(TrackedObject(detection_output[1], position, bbox, object_features, color))
     
     return object_container
 
@@ -84,22 +65,41 @@ def calculate_position(bbox_left, bbox_top, bbox_right, bbox_bottom):
     y = (bbox_top + bbox_bottom) / 2
     position = (x, y)
     return position
-    
 
 
+def visualize_objects(frame, tracked_objects):
+    frame_copy = frame.copy()
 
-    
+    # Display features for each object in its unique color
+    for obj in tracked_objects:
+        for feature in obj.features:
+            x, y = feature.pt
+            cv2.circle(frame_copy, (int(x), int(y)), 5, obj.color, -1)  # Draw the feature points
+
+    # Display all features in a separate window
+    frame_features = frame.copy()
+    for feature in kp1:
+        x, y = feature.pt
+        cv2.circle(frame_features, (int(x), int(y)), 5, (0, 255, 0), -1)  # All features in green
+
+    return frame_copy, frame_features
+
 
 tracked_objects = filter_features(frame_1, detection_output, kp1, des)
 
 print(f"tracked objects: {len(tracked_objects)}")
 
-visualize_frame(frame_number, sequence_number, 2)
+frame_with_objects, all_features_frame = visualize_objects(frame_1, tracked_objects)
 
-# cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
-# cv2.imshow("Video", bboxes_mask * 255)  # Multiply by 255 to visualize as white (255) on black (0)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+# Show frames
+cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+
+cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+cv2.imshow("All Features", all_features_frame)
+
+cv2.waitKey(0)
+cv2.destroyAllWindows()
 
 
 
