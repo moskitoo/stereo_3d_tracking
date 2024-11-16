@@ -7,7 +7,7 @@ import time
 
 K = 2
 BboxFeatureRoi = [1.0, 1.0]
-
+FeatureCountdown = 20
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, descriptors, color):
@@ -18,10 +18,13 @@ class TrackedObject:
         self.features = features
         self.descriptors = descriptors
         self.color = color
+        self.features_countdowns = FeatureCountdown * np.ones(len(features))
+
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
-    
+
+
     def update_state(self, features, descriptors, position, bbox):
         self.features = features
         self.descriptors = descriptors  # not used in this approach
@@ -43,6 +46,7 @@ class BoundingBox:
         self.top = bbox_top
         self.right = bbox_right
         self.bottom = bbox_bottom
+
 
         self.width = self.right - self.left
         self.height = self.bottom - self.top
@@ -232,18 +236,25 @@ def filter_features_optical_flow(
     feature_descriptor_pairs = sorted(
         zip(features, descriptors), key=lambda x: x[0].response, reverse=True
     )
+    if object_container:
+        matching_results = np.zeros((len(detection_output[0]), len(object_container),2))
+    else:
+        matching_results = []
 
-    for bbox in detection_output[0]:
+    filtered_features_list = []
+    bbox_list = []
+    new_object_container = []
+    for bbox_index, bbox in enumerate(detection_output[0]):
         bbox_left, bbox_top, bbox_right, bbox_bottom = map(int, bbox)
         bbox_obj = BoundingBox(bbox_left, bbox_top, bbox_right, bbox_bottom)
-
+        bbox_list.append(bbox_obj)
         filtered_result = bbox_obj.filter_features(feature_descriptor_pairs)
         if filtered_result:
             filtered_features, filtered_descriptors = filtered_result
-
+            filtered_features_list.append((filtered_features, filtered_descriptors))
         # State 1: If no objects exist, create the first one
         if not object_container:
-            object_container.append(
+            new_object_container.append(
                 TrackedObject(
                     detection_output[1],
                     bbox_obj.position,
@@ -257,24 +268,36 @@ def filter_features_optical_flow(
 
         # State 2: Try to match with existing objects
         matched_any = False
-        for obj in object_container:
+        distances = []
+        num_features = []
+        for obj_index, obj in enumerate(object_container):
             if obj.features is not None and len(obj.features) > 0:
-                obj.features, matched_features = featureTracking(
+                tmp_features = obj.features
+                old_matched_features, matched_features = featureTracking(
                     frame_prev, frame, obj.features
                 )
                 distance = np.linalg.norm(bbox_obj.position - obj.position)
-                if (
-                    len(matched_features) > minimal_object_features
-                    and distance < max_distance
-                ):
-                    obj.update_state(matched_features, filtered_descriptors, bbox_obj.position, bbox_obj)
-                    matched_any = True
-                    # print("matched")
-                    break
+                distances.append(distance)
+                num_features.append(len(matched_features))
+                # if (
+                #     len(matched_features) > minimal_object_features
+                #     and distance < max_distance
+                # ):
+
+                if distance < max_distance:
+                    if len(matched_features) > minimal_object_features or len(matched_features)/len(filtered_descriptors) > 0.1:
+
+                        # obj.update_state(features=np.concatenate((obj.features,filtered_features)), descriptors=filtered_descriptors, position=bbox_obj.position, bbox=bbox_obj)
+                        matching_results[bbox_index, obj_index] = np.array([len(matched_features),len(matched_features)/len(filtered_descriptors)])
+                        matched_any = True
+                        print("matched!")
 
         # State 3: No matches found with any existing objects, so create a new one
         if not matched_any and len(filtered_descriptors) > minimal_object_features:
-            object_container.append(
+            # print("no matches")
+            # print(distances)
+            # print(num_features)
+            new_object_container.append(
                 TrackedObject(
                     detection_output[1],
                     bbox_obj.position,
@@ -284,7 +307,18 @@ def filter_features_optical_flow(
                     get_rand_color(),
                 )
             )
-            # print("no object found")
+            print("no object found")
+        elif matched_any:
+            print("matched!")
+            print(distances)
+            print(num_features)
+    if object_container:
+        for obj_index, obj in enumerate(object_container):
+            max_index = np.argmax(matching_results[:,obj_index,0])
+            obj.update_state(features=filtered_features_list[max_index][0], descriptors=filtered_features_list[max_index][1], position=bbox_list[max_index].position, bbox=bbox_list[max_index])
+        object_container = object_container + new_object_container
+    else:
+        object_container = new_object_container
 
     return object_container
 
@@ -388,11 +422,12 @@ for frame_number in range(frame_start, frame_end + 1):
                 if not tracked_object.check_position_qty():
                     object_to_keep.append(tracked_object)
                     tracked_object.update_position_qty()
-                    print("keep")
+                    # print("keep")
                 else:
-                    print("removed")
+                    # print("removed")
+                    _=0
             
-            tracked_objects = object_to_keep
+            object_container = object_to_keep
         
 
         # Show frames
