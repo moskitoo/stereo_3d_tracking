@@ -7,7 +7,8 @@ import time
 
 K = 2
 BboxFeatureRoi = [1.0, 1.0]
-FeatureCountdown = 20
+ObjectCountdown = 1
+flag_first_used = False
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, descriptors, color):
@@ -17,8 +18,10 @@ class TrackedObject:
         self.bbox = bbox
         self.features = features
         self.descriptors = descriptors
+        self.prv_features = None
+        self.prv_descriptors = None
         self.color = color
-        self.features_countdowns = FeatureCountdown * np.ones(len(features))
+        self.object_countdown = ObjectCountdown
 
 
     def __getattribute__(self, name):
@@ -26,10 +29,12 @@ class TrackedObject:
 
 
     def update_state(self, features, descriptors, position, bbox):
+        self.prv_features = self.features
         self.features = features
         self.descriptors = descriptors  # not used in this approach
         self.position.append(position)
         self.bbox = bbox
+        self.object_countdown = ObjectCountdown
     
     def update_position_qty(self):
         self.position_qty = len(self.position)
@@ -39,6 +44,20 @@ class TrackedObject:
             return False
         else:
             True
+
+    def get_features(self):
+        if self.prv_features is not None:
+            return np.concatenate((self.features,self.prv_features))
+        else:
+            return self.features
+
+    def get_descriptors(self):
+        if self.prv_descriptors is not None:
+            return np.concatenate((self.descriptors + self.prv_descriptors))
+        else:
+            return self.descriptors
+
+
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -226,8 +245,7 @@ def featureTracking(prev_img, next_img, prev_points):
 
 
 def filter_features_optical_flow(
-    frame, frame_prev, detection_output, features, descriptors, object_container
-):
+    frame, frame_prev, detection_output, features, descriptors, object_container):
     minimal_object_features = 5
     max_distance = 50
     matching_quality = 0.75  # default = 0.75
@@ -244,6 +262,8 @@ def filter_features_optical_flow(
     filtered_features_list = []
     bbox_list = []
     new_object_container = []
+    print("there are s% boxes", len(detection_output[0]))
+
     for bbox_index, bbox in enumerate(detection_output[0]):
         bbox_left, bbox_top, bbox_right, bbox_bottom = map(int, bbox)
         bbox_obj = BoundingBox(bbox_left, bbox_top, bbox_right, bbox_bottom)
@@ -271,10 +291,10 @@ def filter_features_optical_flow(
         distances = []
         num_features = []
         for obj_index, obj in enumerate(object_container):
-            if obj.features is not None and len(obj.features) > 0:
+            if obj.get_features() is not None and len(obj.features) > 0:
                 tmp_features = obj.features
                 old_matched_features, matched_features = featureTracking(
-                    frame_prev, frame, obj.features
+                    frame_prev, frame, obj.get_features()
                 )
                 distance = np.linalg.norm(bbox_obj.position - obj.position)
                 distances.append(distance)
@@ -290,7 +310,7 @@ def filter_features_optical_flow(
                         # obj.update_state(features=np.concatenate((obj.features,filtered_features)), descriptors=filtered_descriptors, position=bbox_obj.position, bbox=bbox_obj)
                         matching_results[bbox_index, obj_index] = np.array([len(matched_features),len(matched_features)/len(filtered_descriptors)])
                         matched_any = True
-                        print("matched!")
+                        # print("matched!")
 
         # State 3: No matches found with any existing objects, so create a new one
         if not matched_any and len(filtered_descriptors) > minimal_object_features:
@@ -309,13 +329,17 @@ def filter_features_optical_flow(
             )
             print("no object found")
         elif matched_any:
-            print("matched!")
-            print(distances)
-            print(num_features)
+            # print("matched!")
+            _ =3
+            # print(distances)
+            # print(num_features)
     if object_container:
         for obj_index, obj in enumerate(object_container):
             max_index = np.argmax(matching_results[:,obj_index,0])
-            obj.update_state(features=filtered_features_list[max_index][0], descriptors=filtered_features_list[max_index][1], position=bbox_list[max_index].position, bbox=bbox_list[max_index])
+            if matching_results[max_index,obj_index,0]  == 0:
+                obj.object_countdown -= 1
+            else:
+                obj.update_state(features=filtered_features_list[max_index][0], descriptors=filtered_features_list[max_index][1], position=bbox_list[max_index].position, bbox=bbox_list[max_index])
         object_container = object_container + new_object_container
     else:
         object_container = new_object_container
@@ -414,19 +438,24 @@ for frame_number in range(frame_start, frame_end + 1):
         # print(f"time: {time_diff}")
 
         frame_counter += 1
-        if frame_counter % 2 == 0:
+        if frame_counter % 1 == 0:
             # tracked_objects = [obj if obj.check_position_qty() else obj.update_position_qty() for obj in tracked_objects]
             # print("check")
             object_to_keep = []
+            # for i, tracked_object in enumerate(tracked_objects):
+            #     if not tracked_object.check_position_qty():
+            #         object_to_keep.append(tracked_object)
+            #         tracked_object.update_position_qty()
+            #         # print("keep")
+            #     else:
+            #         # print("removed")
+            #         _=0
             for i, tracked_object in enumerate(tracked_objects):
-                if not tracked_object.check_position_qty():
+                if tracked_object.object_countdown != 0:
                     object_to_keep.append(tracked_object)
-                    tracked_object.update_position_qty()
-                    # print("keep")
                 else:
-                    # print("removed")
                     _=0
-            
+            print("there are %s entities left", len(object_to_keep))
             object_container = object_to_keep
         
 
