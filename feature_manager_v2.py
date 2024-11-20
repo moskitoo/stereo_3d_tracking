@@ -58,11 +58,13 @@ def visualize_objects(frame, tracked_objects):
 
     # Display features for each object in its unique color
     for obj in tracked_objects:
-        x = obj.position[0][0]
-        y = obj.position[0][1]
+        x = obj.position[-1][0]
+        y = obj.position[-1][1]
         cv2.circle(
             frame_copy, (x, y), 10, obj.color, -1
         )
+
+        # print(f"points: x:{x}, y: {y}")
         # for feature in obj.features:
         #     try:
         #         x, y = feature
@@ -145,7 +147,7 @@ def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gam
     
     return cost_matrix
 
-def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=2.0):
+def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=1000.0):
 
     # State 1: If no objects exist, create the first one
     if not object_container:
@@ -156,12 +158,22 @@ def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma
 
         matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
         
+        print(f"detected objects: {len(detected_objects)}")
+        print(f"tracked objects: {len(object_container)}")
+        print(f"cost_matrix: {cost_matrix.shape}")
+        print(f"Matches: {matches}")
+        print(f"unmatched_tracked: {unmatched_tracked}")
+        print(f"unmatched_detected: {unmatched_detected}")
+
+        print("\n\n")
+
+
         # matches = [row, col] -> row: tracked, col: detected
 
         # State 2: Match with existing objects
         for tracked_object_id, detect_object_id in matches:
             tracked_object = object_container[tracked_object_id]
-            detected_object = object_container[detect_object_id]
+            detected_object = detected_objects[detect_object_id]
             tracked_object.update_state(detected_object)
         
         # State 3: Remove non matched trakced objects
