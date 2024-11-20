@@ -42,7 +42,7 @@ class BoundingBox:
     def get_bbox_centre(self):
         x = (self.left + self.right) / 2
         y = (self.top + self.bottom) / 2
-        self.position = np.array((x, y))
+        self.position = np.array((x, y)).astype(int)
 
     def get_bbox_img(self, frame):
         return frame[self.top:self.bottom, self.left:self.right]
@@ -58,14 +58,19 @@ def visualize_objects(frame, tracked_objects):
 
     # Display features for each object in its unique color
     for obj in tracked_objects:
-        for feature in obj.features:
-            try:
-                x, y = feature
-            except:
-                x, y = feature.pt
-            cv2.circle(
-                frame_copy, (int(x), int(y)), 5, obj.color, -1
-            )  # Draw the feature points
+        x = obj.position[0][0]
+        y = obj.position[0][1]
+        cv2.circle(
+            frame_copy, (x, y), 10, obj.color, -1
+        )
+        # for feature in obj.features:
+        #     try:
+        #         x, y = feature
+        #     except:
+        #         x, y = feature.pt
+        #     cv2.circle(
+        #         frame_copy, (int(x), int(y)), 10, obj.color, -1
+        #     )  # Draw the feature points
 
     # Display all features in a separate window
     # frame_features = frame.copy()
@@ -101,7 +106,12 @@ def detect_objects(frame, detection_output):
         frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
         kp, des = sift.detectAndCompute(frame_gray, None)
 
-        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, kp, get_rand_color()))
+        if des is None:
+            features = np.zeros(128)
+        else:
+            features = np.mean(des, axis=0)
+
+        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color()))
 
     return detected_objects
 
