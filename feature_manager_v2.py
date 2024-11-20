@@ -3,6 +3,8 @@ import numpy as np
 import random
 from frame_manager import *
 import time
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.optimize import linear_sum_assignment
 
 
 class TrackedObject:
@@ -18,12 +20,12 @@ class TrackedObject:
         return object.__getattribute__(self, name)
 
 
-    def update_state(self, features, descriptors, position, bbox):
-        self.prv_features = self.features
-        self.features = features
-        self.descriptors = descriptors  # not used in this approach
-        self.position.append(position)
-        self.bbox = bbox
+    def update_state(self, detected_object):
+        # self.prv_features = self.features
+        self.position.append(detected_object.position[0])
+        self.bbox = detected_object.bbox
+        self.features = detected_object.features
+        # self.descriptors = descriptors  # not used in this approach
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -44,6 +46,12 @@ class BoundingBox:
 
     def get_bbox_img(self, frame):
         return frame[self.top:self.bottom, self.left:self.right]
+    
+    def get_bbox_area(self):
+        return self.width * self.height
+    
+    def get_bbox_aspect_ratio(self):
+        return self.width / self.height
 
 def visualize_objects(frame, tracked_objects):
     frame_copy = frame.copy()
@@ -60,14 +68,14 @@ def visualize_objects(frame, tracked_objects):
             )  # Draw the feature points
 
     # Display all features in a separate window
-    frame_features = frame.copy()
-    for feature in kp1:
-        x, y = feature.pt
-        cv2.circle(
-            frame_features, (int(x), int(y)), 5, (0, 255, 0), -1
-        )  # All features in green
+    # frame_features = frame.copy()
+    # for feature in kp1:
+    #     x, y = feature.pt
+    #     cv2.circle(
+    #         frame_features, (int(x), int(y)), 5, (0, 255, 0), -1
+    #     )  # All features in green
 
-    return frame_copy, frame_features
+    return frame_copy#, frame_features
 
 def get_rand_color():
     return tuple(random.randint(0, 255) for _ in range(3))
@@ -97,7 +105,79 @@ def detect_objects(frame, detection_output):
 
     return detected_objects
 
+def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.2, delta=0.1):
 
+    num_tracked = len(object_container)
+    num_detections = len(detected_objects)
+    cost_matrix = np.zeros((num_tracked, num_detections))
+
+    for i, tracked_object in enumerate(object_container):
+        for j, detected_object in enumerate(detected_objects):
+            # Position cost
+            pos_cost = np.linalg.norm(tracked_object.position[0] - detected_object.position[0])
+            
+            # Bbox area cost
+            det_obj_area = detected_object.bbox.get_bbox_area()
+            tracked_obj_area = tracked_object.bbox.get_bbox_area()
+            bbox_area_cost = abs(tracked_obj_area - det_obj_area) / max(det_obj_area, tracked_obj_area)
+
+            # Bbox shape cost
+            shape_cost = abs(tracked_object.bbox.get_bbox_aspect_ratio() - detected_object.bbox.get_bbox_aspect_ratio())
+
+            # Feature cost
+            feat_cost = 1 - cosine_similarity([tracked_object.features], [detected_object.features])[0, 0]
+
+            # Class cost
+            class_cost = 0 if tracked_object.type == detected_object.type else 100
+
+            # Total cost
+            cost_matrix[i, j] = alpha * pos_cost + beta * bbox_area_cost + gamma * shape_cost + delta * feat_cost + class_cost
+    
+    return cost_matrix
+
+def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=2.0):
+
+    # State 1: If no objects exist, create the first one
+    if not object_container:
+        object_container = detected_objects
+    else:
+        cost_matrix = get_cost_matrix(detected_objects, object_container, alpha, beta, gamma, delta)
+        row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+        matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
+        
+        # matches = [row, col] -> row: tracked, col: detected
+
+        # State 2: Match with existing objects
+        for tracked_object_id, detect_object_id in matches:
+            tracked_object = object_container[tracked_object_id]
+            detected_object = object_container[detect_object_id]
+            tracked_object.update_state(detected_object)
+        
+        # State 3: Remove non matched trakced objects
+        for unmatched_tracked_id in unmatched_tracked:
+            del object_container[unmatched_tracked_id]
+
+        # State 4: Add non matched detected objects to tracking
+        for unmatched_detected_id in unmatched_detected:
+            object_container.append(detected_objects[unmatched_detected_id])
+
+    return object_container
+
+def filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices):
+    matches = []
+    unmatched_tracked = set(range(len(object_container)))
+    unmatched_detected = set(range(len(detected_objects)))
+        
+    for row, col in zip(row_indices, col_indices):
+        if cost_matrix[row, col] < cost_threshold:
+            matches.append((row, col))
+            unmatched_tracked.discard(row)
+            unmatched_detected.discard(col)
+        
+    unmatched_tracked = list(unmatched_tracked)
+    unmatched_detected = list(unmatched_detected)
+    return matches, unmatched_tracked, unmatched_detected
 
 frame_start = 1  # Start frame number
 frame_end = 140  # End frame number
@@ -106,7 +186,7 @@ sequence_number = 1  # Sequence number
 # Initialize SIFT detector
 sift = cv2.SIFT_create()
 
-object_container = []
+object_container = None
 
 frame_1_prev = None
 
@@ -117,30 +197,22 @@ for frame_number in range(frame_start, frame_end + 1):
     if frame_1_prev is not None:
         start = time.time()
 
-
         frame_1 = get_frame(frame_number, sequence_number, 2)
         # frame_2 = get_frame(frame_number, sequence_number, 3)
         detection_output = get_detection_results(frame_number, sequence_number)
 
         detected_objects = detect_objects(frame_1, detection_output)
 
+        object_container = match_objects(detected_objects, object_container)
 
 
-
-        frame_1_prev_gray = cv2.cvtColor(frame_1_prev, cv2.COLOR_BGR2GRAY)
-        # frame_2_gray = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
-
-        masked_frame_1 = get_masked_image(frame_1, detection_output)
-        frame_1_gray = cv2.cvtColor(masked_frame_1, cv2.COLOR_BGR2GRAY)
-
-        # Detect features in both frames
-        kp1, des = sift.detectAndCompute(frame_1_gray, None)
-
-        tracked_objects = filter_features_optical_flow(frame_1_gray, frame_1_prev_gray, detection_output, kp1, des, object_container)
 
         # # Visualize tracked objects and all features
-        frame_with_objects, all_features_frame = visualize_objects(
-            frame_1, tracked_objects
+        # frame_with_objects, all_features_frame = visualize_objects(
+        #     frame_1, object_container
+        # )
+        frame_with_objects = visualize_objects(
+            frame_1, object_container
         )
 
         time_diff = time.time() - start
@@ -148,16 +220,15 @@ for frame_number in range(frame_start, frame_end + 1):
 
         frame_counter += 1
         
-
         # Show frames
-        cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
-        cv2.imshow("Frame with Masked Image", masked_frame_1)
+        # cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
+        # cv2.imshow("Frame with Masked Image", masked_frame_1)
 
         cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
         cv2.imshow("Frame with Tracked Objects", frame_with_objects)
 
-        cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-        cv2.imshow("All Features", all_features_frame)
+        # cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
+        # cv2.imshow("All Features", all_features_frame)
 
         # Wait for a key press for a short period to create a video effect
         if cv2.waitKey(1) & 0xFF == ord("q"):  # Press 'q' to quit
