@@ -86,6 +86,7 @@ def get_detection_results(frame_number, seq_num):
     return bboxes, obj_types
 
 def detect_objects(frame, detection_output):
+    sift = cv2.SIFT_create()
     detected_objects = []
     for bbox, obj_type in zip(detection_output[0], detection_output[1]):
         bbox_obj = BoundingBox(*bbox)
@@ -247,64 +248,57 @@ def combine_frames(frames):
     combined_frame = cv2.hconcat([column1_combined, column2_combined])
     return combined_frame
 
-frame_start = 1  # Start frame number
-frame_end = 140  # End frame number
-sequence_number = 1  # Sequence number
 
-# Initialize SIFT detector
-sift = cv2.SIFT_create()
+def main():
+    global object_container
+    
+    frame_start = 1  # Start frame number
+    frame_end = 140  # End frame number
+    sequence_number = 1  # Sequence number
 
-object_container = None
+    object_container = None
+    current_frame_number = frame_start
+    frame_1_prev = None
 
-frame_1_prev = None
+    while True:
+        frame_1 = get_frame(current_frame_number, sequence_number, 2)
 
-# Loop through all frames in the sequence
-# while True:
-frame_counter = 0
-for frame_number in range(frame_start, frame_end + 1):
-    if frame_1_prev is not None:
-        start = time.time()
-
-        frame_1 = get_frame(frame_number, sequence_number, 2)
-
-        detection_output = get_detection_results(frame_number, sequence_number)
+        detection_output = get_detection_results(current_frame_number, sequence_number)
 
         detected_objects = detect_objects(frame_1, detection_output)
 
         object_container = match_objects(detected_objects, object_container)
 
-        frame_with_objects = visualize_objects(
-            frame_1, object_container
-        )
-
-        time_diff = time.time() - start
-        # print(f"time: {time_diff} s")
-
-        frame_counter += 1
+        frame_with_objects = visualize_objects(frame_1, object_container)
 
         masked_frame_1 = get_masked_image(frame_1, detection_output)
         bbox_frame = draw_bounding_boxes(frame_1, detection_output)
         
-        # Show frames
-        # cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-        # cv2.imshow("Frame with Tracked Objects", frame_with_objects)
-
-        # cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
-        # cv2.imshow("Frame with Masked Image", masked_frame_1)
-
-        # cv2.namedWindow("Frame with Bboxes", cv2.WINDOW_NORMAL)
-        # cv2.imshow("Frame with Bboxes", bbox_frame)
-
         combined_frames = combine_frames([frame_with_objects, masked_frame_1, bbox_frame])
+        
+        # Display current frame number
+        cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        
         cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
         cv2.imshow("Frame with combined_frames", combined_frames)
 
-        # Wait for a key press for a short period to create a video effect
-        if cv2.waitKey(0) & 0xFF == ord("q"):  # Press 'q' to quit
+        # Wait for key press
+        key = cv2.waitKey(0) & 0xFF
+
+        if key == ord('q'):  # Quit
             break
-    frame_1_prev = get_frame(frame_number, sequence_number, 2)
+        elif key == 81:  # Left arrow key
+            current_frame_number = max(frame_start, current_frame_number - 1)
+        elif key == 83:  # Right arrow key
+            current_frame_number = min(frame_end, current_frame_number + 1)
+        elif key == ord('a'):  # Go back multiple frames
+            current_frame_number = max(frame_start, current_frame_number - 3)
+        elif key == ord('d'):  # Go forward multiple frames
+            current_frame_number = min(frame_end, current_frame_number + 3)
 
-# Close all windows
-cv2.destroyAllWindows()
+    # Close all windows
+    cv2.destroyAllWindows()
 
-print(object_container)
+if __name__ == "__main__":
+    main()
