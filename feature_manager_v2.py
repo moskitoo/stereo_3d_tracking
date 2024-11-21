@@ -278,12 +278,13 @@ def main():
 
         object_container = match_objects(detected_objects, object_container)
 
-        frame_with_objects = visualize_objects(frame_1, object_container)
+        frame_with_tracked_objects = visualize_objects(frame_1, object_container)
+        frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
 
         masked_frame_1 = get_masked_image(frame_1, detection_output)
         bbox_frame = draw_bounding_boxes(frame_1, detection_output)
         
-        combined_frames = combine_frames([frame_with_objects, masked_frame_1, bbox_frame])
+        combined_frames = combine_frames([frame_with_tracked_objects, frame_with_detected_objects, masked_frame_1, bbox_frame])
         
         # Display current frame number
         cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30), 
