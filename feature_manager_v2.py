@@ -68,25 +68,7 @@ def visualize_objects(frame, tracked_objects):
         )
         cv2.putText(frame_copy, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # print(f"points: x:{x}, y: {y}")
-        # for feature in obj.features:
-        #     try:
-        #         x, y = feature
-        #     except:
-        #         x, y = feature.pt
-        #     cv2.circle(
-        #         frame_copy, (int(x), int(y)), 10, obj.color, -1
-        #     )  # Draw the feature points
-
-    # Display all features in a separate window
-    # frame_features = frame.copy()
-    # for feature in kp1:
-    #     x, y = feature.pt
-    #     cv2.circle(
-    #         frame_features, (int(x), int(y)), 5, (0, 255, 0), -1
-    #     )  # All features in green
-
-    return frame_copy#, frame_features
+    return frame_copy
 
 def get_rand_color():
     return tuple(random.randint(0, 255) for _ in range(3))
@@ -104,8 +86,6 @@ def get_detection_results(frame_number, seq_num):
     return bboxes, obj_types
 
 def detect_objects(frame, detection_output):
-    global id_counter
-    
     detected_objects = []
     for bbox, obj_type in zip(detection_output[0], detection_output[1]):
         bbox_obj = BoundingBox(*bbox)
@@ -119,9 +99,7 @@ def detect_objects(frame, detection_output):
         else:
             features = np.mean(des, axis=0)
 
-        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id_counter))
-
-        id_counter += 1
+        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), -1))
 
     return detected_objects
 
@@ -156,9 +134,13 @@ def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gam
     return cost_matrix
 
 def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=100.0):
+    global id_counter
 
     # State 1: If no objects exist, create the first one
     if not object_container:
+        for detected_object in detected_objects:
+            detected_object.id = id_counter
+            id_counter += 1
         object_container = detected_objects
     else:
         cost_matrix = get_cost_matrix(detected_objects, object_container, alpha, beta, gamma, delta)
@@ -191,7 +173,10 @@ def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma
 
         # State 4: Add non matched detected objects to tracking
         for unmatched_detected_id in unmatched_detected:
-            object_container.append(detected_objects[unmatched_detected_id])
+            non_matched_object = detected_objects[unmatched_detected_id]
+            non_matched_object.id = id_counter
+            object_container.append(non_matched_object)
+            id_counter += 1
 
     return object_container
 
@@ -236,33 +221,20 @@ for frame_number in range(frame_start, frame_end + 1):
 
         object_container = match_objects(detected_objects, object_container)
 
-
-
-        # # Visualize tracked objects and all features
-        # frame_with_objects, all_features_frame = visualize_objects(
-        #     frame_1, object_container
-        # )
         frame_with_objects = visualize_objects(
             frame_1, object_container
         )
 
         time_diff = time.time() - start
-        # print(f"time: {time_diff}")
 
         frame_counter += 1
         
         # Show frames
-        # cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
-        # cv2.imshow("Frame with Masked Image", masked_frame_1)
-
         cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
         cv2.imshow("Frame with Tracked Objects", frame_with_objects)
 
-        # cv2.namedWindow("All Features", cv2.WINDOW_NORMAL)
-        # cv2.imshow("All Features", all_features_frame)
-
         # Wait for a key press for a short period to create a video effect
-        if cv2.waitKey(1) & 0xFF == ord("q"):  # Press 'q' to quit
+        if cv2.waitKey(0) & 0xFF == ord("q"):  # Press 'q' to quit
             break
     frame_1_prev = get_frame(frame_number, sequence_number, 2)
 
