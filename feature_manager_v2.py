@@ -177,8 +177,9 @@ def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma
             tracked_object.update_state(detected_object)
         
         # State 3: Remove non matched trakced objects
-        for unmatched_tracked_id in unmatched_tracked:
-            del object_container[unmatched_tracked_id]
+        # Convert unmatched_tracked to a set for faster lookup
+        unmatched_tracked_set = set(unmatched_tracked)
+        object_container = [tracked_object for id, tracked_object in enumerate(object_container) if id not in unmatched_tracked_set]
 
         # State 4: Add non matched detected objects to tracking
         for unmatched_detected_id in unmatched_detected:
