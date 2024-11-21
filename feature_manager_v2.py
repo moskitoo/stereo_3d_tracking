@@ -5,6 +5,7 @@ from frame_manager import *
 import time
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.optimize import linear_sum_assignment
+import pandas as pd
 
 
 id_counter = 0
@@ -132,6 +133,9 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
             # Total cost
             cost_matrix[i, j] = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
     
+    pd.options.display.float_format = '{:,.2f}'.format
+    print(pd.DataFrame(cost_matrix))
+
     return cost_matrix
 
 def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
@@ -255,6 +259,9 @@ def main():
     frame_start = 1  # Start frame number
     frame_end = 140  # End frame number
     sequence_number = 1  # Sequence number
+
+    # frame_end = 205  # End frame number
+    # sequence_number = 2  # Sequence number
 
     object_container = None
     current_frame_number = frame_start
