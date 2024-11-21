@@ -65,6 +65,7 @@ class BoundingBox:
 def visualize_objects(frame, tracked_objects):
     frame_copy = frame.copy()
 
+    counter = 0
     # Display features for each object in its unique color
     for obj in tracked_objects:
         x = obj.position[-1][0]
@@ -74,6 +75,8 @@ def visualize_objects(frame, tracked_objects):
         )
         cv2.putText(frame_copy, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
+        counter += 1
+    print(counter)
     return frame_copy
 
 def get_rand_color():
@@ -162,6 +165,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
         'detected_ids': column_ids
     })
 
+
     print(pd.DataFrame(cost_matrix, index=row_ids, columns=column_ids))
     
     return cost_matrix
@@ -189,11 +193,12 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
         # print(f"detected objects: {len(detected_objects)}")
         # print(f"tracked objects: {len(object_container)}")
         # print(f"cost_matrix: {cost_matrix.shape}")
-        print(f"Matches: {matches}")
+        print(f"Matches:         {matches}")
         # print(f"unmatched_tracked: {unmatched_tracked}")
         # print(f"unmatched_detected: {unmatched_detected}")
-
+        matches_decoded = [(object_container[tr_id].id, detected_objects[det_id].id) for (tr_id, det_id) in matches]
         # print("\n\n")
+        print(f"Matches decoded: {matches_decoded}")
 
         # State 2: Match with existing objects
         for tracked_object_id, detect_object_id in matches:
@@ -204,18 +209,27 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
         # State 3: Remove non matched trakced objects
         # Convert unmatched_tracked to a set for faster lookup
         unmatched_tracked_set = set(unmatched_tracked)
+        print(f"unmatched tracked objects: {unmatched_tracked}")
         object_container = [tracked_object for id, tracked_object in enumerate(object_container) if id not in unmatched_tracked_set]
 
         # State 4: Add non matched detected objects to tracking
         unmatched_detected_ids = []
         for unmatched_detected_id in unmatched_detected:
             non_matched_object = detected_objects[unmatched_detected_id]
-            non_matched_object.id = id_counter
+            # non_matched_object.id = id_counter
+            new_tracked_object = TrackedObject(
+                non_matched_object.type,
+                non_matched_object.position,
+                non_matched_object.bbox,
+                non_matched_object.features,
+                non_matched_object.color,
+                id_counter  # New ID for tracked object
+            )
             object_container.append(non_matched_object)
             unmatched_detected_ids.append(id_counter)
             id_counter += 1
 
-        print(f"unmatched objects: {unmatched_detected_ids}")
+        print(f"unmatched detected objects: {unmatched_detected_ids}")
         
         return object_container, matches
 
@@ -318,10 +332,14 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
         detected_obj = detected_objects[detected_idx]
         
         start_point = tracked_obj.position[-1]
-        end_point = (detected_obj.position[0][0], detected_obj.position[0][1] + frame.shape[0])
+        adjusted_start_point = (start_point[0], start_point[1] + 10)
+        end_point = (detected_obj.position[0][0], detected_obj.position[0][1] + frame.shape[0] - 10)
         
-        cv2.line(split_frame, tuple(start_point), end_point, (0, 255, 0), 2)
+        cv2.line(split_frame, adjusted_start_point, end_point, (0, 255, 0), 2)
     
+    
+    # print_objects(detected_objects)
+
     return split_frame
 
 def save_cost_matrices():
@@ -371,6 +389,10 @@ def save_cost_matrices():
     # Clear storage after saving
     cost_matrix_storage.clear()
 
+def print_objects(print_objects):
+    for obj in print_objects:
+        print(f"Object ID: {obj.id}, Position: {obj.position}")
+
 def main():
     global object_container
     global current_frame_number
@@ -383,37 +405,45 @@ def main():
     # frame_end = 205  # End frame number
     # sequence_number = 2  # Sequence number
 
-    object_container = None
+    object_container = []
     current_frame_number = frame_start
     frame_1_prev = None
 
     while True:
+        print(f"frame number: {current_frame_number}")
+
         frame_1 = get_frame(current_frame_number, sequence_number, 2)
 
         detection_output = get_detection_results(current_frame_number, sequence_number)
 
         detected_objects = detect_objects(frame_1, detection_output)
 
+        print("just detected")
+        print_objects(detected_objects)
+
+        # frame_with_tracked_objects = visualize_objects(frame_1, object_container)
+
         object_container, matches = match_objects(detected_objects, object_container)
 
-        frame_with_tracked_objects = visualize_objects(frame_1, object_container)
-        frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
+        # frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
 
+        print("just detected")
+        print_objects(detected_objects)
         frame_with_matched_objects = visualize_matched_objects(frame_1, object_container, detected_objects, matches)
 
-        masked_frame_1 = get_masked_image(frame_1, detection_output)
-        bbox_frame = draw_bounding_boxes(frame_1, detection_output)
+        # masked_frame_1 = get_masked_image(frame_1, detection_output)
+        # bbox_frame = draw_bounding_boxes(frame_1, detection_output)
         
-        combined_frames = combine_frames([frame_with_tracked_objects, frame_with_detected_objects, masked_frame_1, bbox_frame])
+        # combined_frames = combine_frames([frame_with_tracked_objects, frame_with_detected_objects, masked_frame_1, bbox_frame])
         
         print("\n\n")
 
         # Display current frame number
-        cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30), 
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
         
-        cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
-        cv2.imshow("Frame with combined_frames", combined_frames)
+        # cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
+        # cv2.imshow("Frame with combined_frames", combined_frames)
 
         cv2.namedWindow("Frame with frame_with_matched_objects", cv2.WINDOW_NORMAL)
         cv2.imshow("Frame with frame_with_matched_objects", frame_with_matched_objects)
