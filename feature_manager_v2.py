@@ -148,14 +148,14 @@ def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma
 
         matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
         
-        print(f"detected objects: {len(detected_objects)}")
-        print(f"tracked objects: {len(object_container)}")
-        print(f"cost_matrix: {cost_matrix.shape}")
-        print(f"Matches: {matches}")
-        print(f"unmatched_tracked: {unmatched_tracked}")
-        print(f"unmatched_detected: {unmatched_detected}")
+        # print(f"detected objects: {len(detected_objects)}")
+        # print(f"tracked objects: {len(object_container)}")
+        # print(f"cost_matrix: {cost_matrix.shape}")
+        # print(f"Matches: {matches}")
+        # print(f"unmatched_tracked: {unmatched_tracked}")
+        # print(f"unmatched_detected: {unmatched_detected}")
 
-        print("\n\n")
+        # print("\n\n")
 
 
         # matches = [row, col] -> row: tracked, col: detected
@@ -195,6 +195,58 @@ def filter_false_matches(detected_objects, object_container, cost_threshold, cos
     unmatched_detected = list(unmatched_detected)
     return matches, unmatched_tracked, unmatched_detected
 
+def get_masked_image(frame, detection_output):
+    bboxes = detection_output[0]
+
+    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+
+    for bbox in bboxes:
+        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
+        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
+        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
+
+        mask[bbox_top:bbox_bottom, bbox_left:bbox_right] = 255
+
+    masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+
+    return masked_frame
+
+def draw_bounding_boxes(frame, detection_output):
+    bboxes = detection_output[0]
+
+    for bbox in bboxes:
+        # Extract bounding box coordinates
+        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
+        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
+        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
+
+        # Draw the bounding box on the frame
+        cv2.rectangle(frame, (bbox_left, bbox_top), (bbox_right, bbox_bottom), color=(0, 255, 0), thickness=2)
+
+    return frame
+
+def combine_frames(frames):
+
+    # Split the list of frames into two columns
+    mid_index = (len(frames) + 1) // 2  # Handle odd number of frames
+    column1 = frames[:mid_index]
+    column2 = frames[mid_index:]
+    
+    # Add blank frames to the shorter column if necessary
+    frame_height, frame_width = frames[0].shape[:2]
+    blank_frame = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)
+    
+    if len(column1) > len(column2):
+        column2.append(blank_frame)
+    
+    # Stack frames vertically in each column
+    column1_combined = cv2.vconcat(column1)
+    column2_combined = cv2.vconcat(column2)
+    
+    # Combine the two columns horizontally
+    combined_frame = cv2.hconcat([column1_combined, column2_combined])
+    return combined_frame
+
 frame_start = 1  # Start frame number
 frame_end = 140  # End frame number
 sequence_number = 1  # Sequence number
@@ -214,7 +266,7 @@ for frame_number in range(frame_start, frame_end + 1):
         start = time.time()
 
         frame_1 = get_frame(frame_number, sequence_number, 2)
-        # frame_2 = get_frame(frame_number, sequence_number, 3)
+
         detection_output = get_detection_results(frame_number, sequence_number)
 
         detected_objects = detect_objects(frame_1, detection_output)
@@ -226,12 +278,26 @@ for frame_number in range(frame_start, frame_end + 1):
         )
 
         time_diff = time.time() - start
+        # print(f"time: {time_diff} s")
 
         frame_counter += 1
+
+        masked_frame_1 = get_masked_image(frame_1, detection_output)
+        bbox_frame = draw_bounding_boxes(frame_1, detection_output)
         
         # Show frames
-        cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
-        cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+        # cv2.namedWindow("Frame with Tracked Objects", cv2.WINDOW_NORMAL)
+        # cv2.imshow("Frame with Tracked Objects", frame_with_objects)
+
+        # cv2.namedWindow("Frame with Masked Image", cv2.WINDOW_NORMAL)
+        # cv2.imshow("Frame with Masked Image", masked_frame_1)
+
+        # cv2.namedWindow("Frame with Bboxes", cv2.WINDOW_NORMAL)
+        # cv2.imshow("Frame with Bboxes", bbox_frame)
+
+        combined_frames = combine_frames([frame_with_objects, masked_frame_1, bbox_frame])
+        cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
+        cv2.imshow("Frame with combined_frames", combined_frames)
 
         # Wait for a key press for a short period to create a video effect
         if cv2.waitKey(0) & 0xFF == ord("q"):  # Press 'q' to quit
