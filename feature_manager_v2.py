@@ -89,7 +89,7 @@ def get_detection_results(frame_number, seq_num):
 def detect_objects(frame, detection_output):
     sift = cv2.SIFT_create()
     detected_objects = []
-    for bbox, obj_type in zip(detection_output[0], detection_output[1]):
+    for id, [bbox, obj_type] in enumerate(zip(detection_output[0], detection_output[1])):
         bbox_obj = BoundingBox(*bbox)
 
         cropped_frame = bbox_obj.get_bbox_img(frame)
@@ -101,7 +101,7 @@ def detect_objects(frame, detection_output):
         else:
             features = np.mean(des, axis=0)
 
-        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), -1))
+        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id))
 
     return detected_objects
 
@@ -133,8 +133,10 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
             # Total cost
             cost_matrix[i, j] = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
     
+    row_ids = [obj.id for obj in object_container]
+    column_ids = [obj.id for obj in detected_objects]
     pd.options.display.float_format = '{:,.2f}'.format
-    print(pd.DataFrame(cost_matrix))
+    print(pd.DataFrame(cost_matrix, index=row_ids, columns=column_ids))
 
     return cost_matrix
 
