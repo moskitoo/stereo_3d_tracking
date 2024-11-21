@@ -149,6 +149,8 @@ def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3
             detected_object.id = id_counter
             id_counter += 1
         object_container = detected_objects
+
+        return object_container, []
     else:
         cost_matrix = get_cost_matrix(detected_objects, object_container, pos_w, bbox_area_w, bbox_shape_w, feat_w)
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
@@ -158,14 +160,11 @@ def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3
         # print(f"detected objects: {len(detected_objects)}")
         # print(f"tracked objects: {len(object_container)}")
         # print(f"cost_matrix: {cost_matrix.shape}")
-        # print(f"Matches: {matches}")
+        print(f"Matches: {matches}")
         # print(f"unmatched_tracked: {unmatched_tracked}")
         # print(f"unmatched_detected: {unmatched_detected}")
 
         # print("\n\n")
-
-
-        # matches = [row, col] -> row: tracked, col: detected
 
         # State 2: Match with existing objects
         for tracked_object_id, detect_object_id in matches:
@@ -184,8 +183,8 @@ def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3
             non_matched_object.id = id_counter
             object_container.append(non_matched_object)
             id_counter += 1
-
-    return object_container
+        
+        return object_container, matches
 
 def filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices):
     matches = []
@@ -254,6 +253,43 @@ def combine_frames(frames):
     combined_frame = cv2.hconcat([column1_combined, column2_combined])
     return combined_frame
 
+def visualize_matched_objects(frame, tracked_objects, detected_objects, matches):
+    # Create a frame twice the height of the original
+    split_frame = np.zeros((frame.shape[0] * 2, frame.shape[1], 3), dtype=np.uint8)
+    
+    # Copy the original frame to the top half
+    split_frame[:frame.shape[0], :, :] = frame.copy()
+    split_frame[frame.shape[0]:, :, :] = frame.copy()
+    
+    # Top frame - tracked objects
+    for obj in tracked_objects:
+        x = obj.position[-1][0]
+        y = obj.position[-1][1]
+        cv2.circle(
+            split_frame, (x, y), 10, obj.color, -1
+        )
+        cv2.putText(split_frame, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+    
+    # Bottom frame - detected objects
+    for obj in detected_objects:
+        x = obj.position[0][0]
+        y = obj.position[0][1] + frame.shape[0]  # Offset y to place in bottom half
+        cv2.circle(
+            split_frame, (x, y), 10, obj.color, -1
+        )
+        cv2.putText(split_frame, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+    
+    # Draw lines connecting matched objects
+    for tracked_idx, detected_idx in matches:
+        tracked_obj = tracked_objects[tracked_idx]
+        detected_obj = detected_objects[detected_idx]
+        
+        start_point = tracked_obj.position[-1]
+        end_point = (detected_obj.position[0][0], detected_obj.position[0][1] + frame.shape[0])
+        
+        cv2.line(split_frame, tuple(start_point), end_point, (0, 255, 0), 2)
+    
+    return split_frame
 
 def main():
     global object_container
@@ -276,10 +312,12 @@ def main():
 
         detected_objects = detect_objects(frame_1, detection_output)
 
-        object_container = match_objects(detected_objects, object_container)
+        object_container, matches = match_objects(detected_objects, object_container)
 
         frame_with_tracked_objects = visualize_objects(frame_1, object_container)
         frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
+
+        frame_with_matched_objects = visualize_matched_objects(frame_1, object_container, detected_objects, matches)
 
         masked_frame_1 = get_masked_image(frame_1, detection_output)
         bbox_frame = draw_bounding_boxes(frame_1, detection_output)
@@ -292,6 +330,9 @@ def main():
         
         cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
         cv2.imshow("Frame with combined_frames", combined_frames)
+
+        cv2.namedWindow("Frame with frame_with_matched_objects", cv2.WINDOW_NORMAL)
+        cv2.imshow("Frame with frame_with_matched_objects", frame_with_matched_objects)
 
         # Wait for key press
         key = cv2.waitKey(0) & 0xFF
