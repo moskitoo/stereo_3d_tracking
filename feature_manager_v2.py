@@ -103,7 +103,7 @@ def detect_objects(frame, detection_output):
 
     return detected_objects
 
-def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.2, delta=0.1):
+def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.2, feat_w=0.1):
 
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
@@ -129,11 +129,11 @@ def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gam
             class_cost = 0 if tracked_object.type == detected_object.type else 100
 
             # Total cost
-            cost_matrix[i, j] = alpha * pos_cost + beta * bbox_area_cost + gamma * shape_cost + delta * feat_cost + class_cost
+            cost_matrix[i, j] = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
     
     return cost_matrix
 
-def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=100.0):
+def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
     global id_counter
 
     # State 1: If no objects exist, create the first one
@@ -143,7 +143,7 @@ def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma
             id_counter += 1
         object_container = detected_objects
     else:
-        cost_matrix = get_cost_matrix(detected_objects, object_container, alpha, beta, gamma, delta)
+        cost_matrix = get_cost_matrix(detected_objects, object_container, pos_w, bbox_area_w, bbox_shape_w, feat_w)
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
         matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
