@@ -7,13 +7,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.optimize import linear_sum_assignment
 
 
+id_counter = 0
+
 class TrackedObject:
-    def __init__(self, type, position, bbox, features, color):
+    def __init__(self, type, position, bbox, features, color, id):
         self.type = type
         self.position = [position]
         self.bbox = bbox
         self.features = features
         self.color = color
+        self.id = id
 
 
     def __getattribute__(self, name):
@@ -63,6 +66,7 @@ def visualize_objects(frame, tracked_objects):
         cv2.circle(
             frame_copy, (x, y), 10, obj.color, -1
         )
+        cv2.putText(frame_copy, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
         # print(f"points: x:{x}, y: {y}")
         # for feature in obj.features:
@@ -100,6 +104,8 @@ def get_detection_results(frame_number, seq_num):
     return bboxes, obj_types
 
 def detect_objects(frame, detection_output):
+    global id_counter
+    
     detected_objects = []
     for bbox, obj_type in zip(detection_output[0], detection_output[1]):
         bbox_obj = BoundingBox(*bbox)
@@ -113,7 +119,9 @@ def detect_objects(frame, detection_output):
         else:
             features = np.mean(des, axis=0)
 
-        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color()))
+        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id_counter))
+
+        id_counter += 1
 
     return detected_objects
 
@@ -147,7 +155,7 @@ def get_cost_matrix(detected_objects, object_container, alpha=0.4, beta=0.3, gam
     
     return cost_matrix
 
-def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=1000.0):
+def match_objects(detected_objects, object_container, alpha=0.4, beta=0.3, gamma=0.3, delta=0.1, cost_threshold=100.0):
 
     # State 1: If no objects exist, create the first one
     if not object_container:
