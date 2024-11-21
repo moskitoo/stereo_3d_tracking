@@ -6,9 +6,14 @@ import time
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.optimize import linear_sum_assignment
 import pandas as pd
+from datetime import datetime
 
 
 id_counter = 0
+current_frame_number = 0
+
+cost_matrix_storage = []
+SAVE_DIR = "cost_matrices"
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, color, id):
@@ -106,11 +111,14 @@ def detect_objects(frame, detection_output):
     return detected_objects
 
 def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.2, feat_w=0.1):
-
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
     cost_matrix = np.zeros((num_tracked, num_detections))
-
+    
+    # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
+    # Added extra dimension for total cost
+    cost_matrix_detailed = np.zeros((num_tracked, num_detections, 6))
+    
     for i, tracked_object in enumerate(object_container):
         for j, detected_object in enumerate(detected_objects):
             # Position cost
@@ -120,27 +128,45 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
             det_obj_area = detected_object.bbox.get_bbox_area()
             tracked_obj_area = tracked_object.bbox.get_bbox_area()
             bbox_area_cost = abs(tracked_obj_area - det_obj_area) / max(det_obj_area, tracked_obj_area)
-
+            
             # Bbox shape cost
             shape_cost = abs(tracked_object.bbox.get_bbox_aspect_ratio() - detected_object.bbox.get_bbox_aspect_ratio())
-
+            
             # Feature cost
             feat_cost = 1 - cosine_similarity([tracked_object.features], [detected_object.features])[0, 0]
-
+            
             # Class cost
             class_cost = 0 if tracked_object.type == detected_object.type else 100
-
-            # Total cost
-            cost_matrix[i, j] = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
+            
+            # Calculate total cost
+            total_cost = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
+            cost_matrix[i, j] = total_cost
+            
+            # Store detailed costs including total cost
+            detailed_cost = [pos_cost, bbox_area_cost, shape_cost, feat_cost, class_cost, total_cost]
+            cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
     
     row_ids = [obj.id for obj in object_container]
     column_ids = [obj.id for obj in detected_objects]
     pd.options.display.float_format = '{:,.2f}'.format
-    print(pd.DataFrame(cost_matrix, index=row_ids, columns=column_ids))
+    
+    # Print detailed costs with total cost included
+    # print(pd.DataFrame(cost_matrix_detailed.reshape(num_tracked, num_detections * 6), 
+    #                   index=row_ids, 
+    #                   columns=column_ids * 6))
 
+    cost_matrix_storage.append({
+        'frame': current_frame_number,  # You'll need to make current_frame_number accessible
+        'matrix': cost_matrix_detailed,
+        'tracked_ids': row_ids,
+        'detected_ids': column_ids
+    })
+
+    print(pd.DataFrame(cost_matrix, index=row_ids, columns=column_ids))
+    
     return cost_matrix
 
-def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
+def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
     global id_counter
 
     # State 1: If no objects exist, create the first one
@@ -149,6 +175,9 @@ def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3
             detected_object.id = id_counter
             id_counter += 1
         object_container = detected_objects
+
+        detected_objects_ids = [x.id for x in detected_objects]
+        print(f"added objects: {detected_objects_ids}")
 
         return object_container, []
     else:
@@ -178,11 +207,15 @@ def match_objects(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3
         object_container = [tracked_object for id, tracked_object in enumerate(object_container) if id not in unmatched_tracked_set]
 
         # State 4: Add non matched detected objects to tracking
+        unmatched_detected_ids = []
         for unmatched_detected_id in unmatched_detected:
             non_matched_object = detected_objects[unmatched_detected_id]
             non_matched_object.id = id_counter
             object_container.append(non_matched_object)
+            unmatched_detected_ids.append(id_counter)
             id_counter += 1
+
+        print(f"unmatched objects: {unmatched_detected_ids}")
         
         return object_container, matches
 
@@ -291,10 +324,59 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
     
     return split_frame
 
+def save_cost_matrices():
+    """Save all accumulated cost matrices to disk"""
+    if not cost_matrix_storage:
+        return
+    
+    # Create directory if it doesn't exist
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    
+    # Create timestamp for unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Convert the list of matrices into a single DataFrame
+    all_data = []
+    for frame_data in cost_matrix_storage:
+        frame_num = frame_data['frame']
+        matrix = frame_data['matrix']
+        
+        # Flatten the matrix and create rows
+        for tracked_idx in range(matrix.shape[0]):
+            for detected_idx in range(matrix.shape[1]):
+                costs = matrix[tracked_idx, detected_idx]
+                row = {
+                    'frame': frame_num,
+                    'tracked_object_id': frame_data['tracked_ids'][tracked_idx],
+                    'detected_object_id': frame_data['detected_ids'][detected_idx],
+                    'position_cost': costs[0],
+                    'bbox_area_cost': costs[1],
+                    'shape_cost': costs[2],
+                    'feature_cost': costs[3],
+                    'class_cost': costs[4],
+                    'total_cost': costs[5]
+                }
+                all_data.append(row)
+    
+    # Create DataFrame
+    df = pd.DataFrame(all_data)
+    
+    # Save to CSV
+    filename = f"cost_matrices_{timestamp}.csv"
+    filepath = os.path.join(SAVE_DIR, filename)
+    df.to_csv(filepath, index=False)
+    
+    print(f"Saved cost matrices to {filepath}")
+    
+    # Clear storage after saving
+    cost_matrix_storage.clear()
+
 def main():
     global object_container
+    global current_frame_number
     
     frame_start = 1  # Start frame number
+
     frame_end = 140  # End frame number
     sequence_number = 1  # Sequence number
 
@@ -324,6 +406,8 @@ def main():
         
         combined_frames = combine_frames([frame_with_tracked_objects, frame_with_detected_objects, masked_frame_1, bbox_frame])
         
+        print("\n\n")
+
         # Display current frame number
         cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
@@ -347,6 +431,8 @@ def main():
             current_frame_number = max(frame_start, current_frame_number - 3)
         elif key == ord('d'):  # Go forward multiple frames
             current_frame_number = min(frame_end, current_frame_number + 3)
+
+    save_cost_matrices()
 
     # Close all windows
     cv2.destroyAllWindows()
