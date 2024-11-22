@@ -219,13 +219,13 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
             # non_matched_object.id = id_counter
             new_tracked_object = TrackedObject(
                 non_matched_object.type,
-                non_matched_object.position,
+                non_matched_object.position[0],
                 non_matched_object.bbox,
                 non_matched_object.features,
                 non_matched_object.color,
                 id_counter  # New ID for tracked object
             )
-            object_container.append(non_matched_object)
+            object_container.append(new_tracked_object)
             unmatched_detected_ids.append(id_counter)
             id_counter += 1
 
@@ -309,7 +309,7 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
     split_frame[frame.shape[0]:, :, :] = frame.copy()
     
     # Top frame - tracked objects
-    for obj in tracked_objects:
+    for obj in tracked_objects: 
         x = obj.position[-1][0]
         y = obj.position[-1][1]
         cv2.circle(
@@ -418,17 +418,12 @@ def main():
 
         detected_objects = detect_objects(frame_1, detection_output)
 
-        print("just detected")
-        print_objects(detected_objects)
-
         # frame_with_tracked_objects = visualize_objects(frame_1, object_container)
 
         object_container, matches = match_objects(detected_objects, object_container)
 
         # frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
 
-        print("just detected")
-        print_objects(detected_objects)
         frame_with_matched_objects = visualize_matched_objects(frame_1, object_container, detected_objects, matches)
 
         # masked_frame_1 = get_masked_image(frame_1, detection_output)
