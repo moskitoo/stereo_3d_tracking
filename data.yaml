@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['Car', 'Cyclist', 'Pedestrian']
+
+roboflow:
+  workspace: ahmed-stohy
+  project: kitti-eux6l
+  version: 3
+  license: MIT
+  url: https://universe.roboflow.com/ahmed-stohy/kitti-eux6l/dataset/3
