@@ -13,21 +13,20 @@ from feature_manager_v2 import (
 )
 
 from object_detection import *
+from depth_image_manager import *
 
 
 class ObjectTracker:
     """Manages object tracking across video frames."""
-    def __init__(self, sequence_number: int = 3, camera_number: int = 2):
-        self.object_detector = ObjectDetector(sequence_number, camera_number)
+    def __init__(self, sequence_number: int = 3):
+        self.object_detector = ObjectDetector(sequence_number)
+        self.depth_manager = DepthManager()
         self.object_container = {}
 
     def process_frame(self, image, raw_image, path) -> None:
         """Process a single frame for object detection and tracking."""
         image = image.to(self.object_detector.device)
         image.requires_grad = True
-
-        # Convert raw image for visualization
-        raw_image = self.process_raw_image(raw_image)
 
         # Detect objects
         detection_output = self.object_detector.detect_objects(path)
@@ -59,8 +58,14 @@ class ObjectTracker:
 
     def run(self):
         """Run object tracking on all frames."""
-        for image, raw_image, path in tqdm(self.object_detector.dataloader):
-            combined_frames, frame_with_matched_objects = self.process_frame(image, raw_image, path)
+        for left_image, right_image, left_raw_img, right_raw_img, left_img_path, right_img_path in tqdm(self.object_detector.dataloader):
+
+            left_raw_img = self.process_raw_image(left_raw_img)
+            right_raw_img = self.process_raw_image(right_raw_img)
+
+            combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path)
+
+            disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
             
             cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with combined_frames", combined_frames)
@@ -68,14 +73,15 @@ class ObjectTracker:
             cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with matched objects", frame_with_matched_objects)
 
+            cv2.imshow('Disparity Map', disparity)
+
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
 def main():
     sequence_number = 1
-    camera_number = 2
-    tracker = ObjectTracker(sequence_number=sequence_number, camera_number=camera_number)
+    tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 
 if __name__ == '__main__':
