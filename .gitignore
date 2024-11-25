@@ -1,5 +1,5 @@
 data/*
-test/*
-train/*
-valid/*
-valid1/*
+test/
+train/
+valid/
+valid1/
