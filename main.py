@@ -23,10 +23,12 @@ class ObjectTracker:
         self.depth_manager = DepthManager()
         self.object_container = {}
 
-    def process_frame(self, image, raw_image, path) -> None:
+    def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
         image = image.to(self.object_detector.device)
         image.requires_grad = True
+
+        self.disparity = disparity
 
         # Detect objects
         detection_output = self.object_detector.detect_objects(path)
@@ -41,6 +43,8 @@ class ObjectTracker:
         frame_with_matched_objects = visualize_matched_objects(raw_image, self.object_container, detected_objects, matches_decoded)
         masked_frame = get_masked_image(raw_image, detection_output[0])
         
+        self.extend_tracked_position_to_3d(disparity)
+
         combined_frames = combine_frames([
             frame_with_tracked_objects, 
             frame_with_detected_objects, 
@@ -56,6 +60,10 @@ class ObjectTracker:
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
 
+    def extend_tracked_position_to_3d(self):
+        pass
+
+
     def run(self):
         """Run object tracking on all frames."""
         for left_image, right_image, left_raw_img, right_raw_img, left_img_path, right_img_path in tqdm(self.object_detector.dataloader):
@@ -63,10 +71,10 @@ class ObjectTracker:
             left_raw_img = self.process_raw_image(left_raw_img)
             right_raw_img = self.process_raw_image(right_raw_img)
 
-            combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path)
-
             disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
-            
+
+            combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path, disparity)
+
             cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with combined_frames", combined_frames)
 
