@@ -31,11 +31,9 @@ class TrackedObject:
 
 
     def update_state(self, detected_object):
-        # self.prv_features = self.features
         self.position.append(detected_object.position[0])
         self.bbox = detected_object.bbox
         self.features = detected_object.features
-        # self.descriptors = descriptors  # not used in this approach
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -61,13 +59,6 @@ class BoundingBox:
         self.position = np.array((x, y)).astype(int)
 
     def get_bbox_img(self, frame):
-
-        print(frame.shape)
-        print(self.top)
-        print(self.bottom)
-        print(self.left)
-        print(self.right)
-
         return frame[self.top:self.bottom, self.left:self.right]
     
     def get_bbox_area(self):
@@ -81,7 +72,7 @@ def visualize_objects(frame, tracked_objects):
 
     counter = 0
     # Display features for each object in its unique color
-    for obj in tracked_objects:
+    for obj in tracked_objects.values():
         x = obj.position[-1][0]
         y = obj.position[-1][1]
         cv2.circle(
@@ -129,7 +120,7 @@ def detect_objects(frame, detection_output):
 
 def detect_objects_yolo(frame, detection_output):
     sift = cv2.SIFT_create()
-    detected_objects = []
+    detected_objects = {}
     print(type(detection_output))
     for id, [bbox, obj_type] in enumerate(zip(detection_output.boxes.xyxy, detection_output.boxes.cls)):
         bbox_obj = BoundingBox(*bbox)
@@ -144,7 +135,7 @@ def detect_objects_yolo(frame, detection_output):
         else:
             features = np.mean(des, axis=0)
 
-        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id))
+        detected_objects[id] = TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id)
 
     return detected_objects
 
@@ -157,8 +148,8 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     # Added extra dimension for total cost
     cost_matrix_detailed = np.zeros((num_tracked, num_detections, 6))
 
-    for i, tracked_object in enumerate(object_container):
-        for j, detected_object in enumerate(detected_objects):
+    for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
+        for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
             # Position cost
             pos_cost = np.linalg.norm(tracked_object.position[0] - detected_object.position[0])
             
@@ -184,8 +175,8 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
             detailed_cost = [pos_cost, bbox_area_cost, shape_cost, feat_cost, class_cost, total_cost]
             cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
     
-    row_ids = [obj.id for obj in object_container]
-    column_ids = [obj.id for obj in detected_objects]
+    row_ids = object_container.keys()
+    column_ids = detected_objects.keys()
     pd.options.display.float_format = '{:,.2f}'.format
     
     # Print detailed costs with total cost included
@@ -203,49 +194,48 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
 
     print(pd.DataFrame(cost_matrix, index=row_ids, columns=column_ids))
     
-    return cost_matrix
+    return cost_matrix, list(row_ids), list(column_ids)
 
 def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
     global id_counter
 
     # State 1: If no objects exist, create the first one
     if not object_container:
-        for detected_object in detected_objects:
+        for container_id, detected_object in detected_objects.items():
+            container_id = id_counter
             detected_object.id = id_counter
             id_counter += 1
         object_container = detected_objects
 
-        detected_objects_ids = [x.id for x in detected_objects]
+        detected_objects_ids = [x.id for x in detected_objects.values()]
         print(f"added objects: {detected_objects_ids}")
 
-        return object_container, []
+        detected_objects_ids = [x for x in detected_objects]
+        print(f"added objects container ids: {detected_objects_ids}")
+
+        return object_container, [], []
     else:
-        cost_matrix = get_cost_matrix(detected_objects, object_container, pos_w, bbox_area_w, bbox_shape_w, feat_w)
+        cost_matrix, row_ids, column_ids = get_cost_matrix(detected_objects, object_container, pos_w, bbox_area_w, bbox_shape_w, feat_w)
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
         matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
-        
-        # print(f"detected objects: {len(detected_objects)}")
-        # print(f"tracked objects: {len(object_container)}")
-        # print(f"cost_matrix: {cost_matrix.shape}")
-        # print(f"Matches:         {matches}")
-        # print(f"unmatched_tracked: {unmatched_tracked}")
-        # print(f"unmatched_detected: {unmatched_detected}")
-        matches_decoded = [(object_container[tr_id].id, detected_objects[det_id].id) for (tr_id, det_id) in matches]
-        # print("\n\n")
-        print(f"Matches decoded: {matches_decoded}")
+
+        matches_decoded = []
+        for match in matches:
+            matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
         # State 2: Match with existing objects
-        for tracked_object_id, detect_object_id in matches:
+        for tracked_object_id, detect_object_id in matches_decoded:
             tracked_object = object_container[tracked_object_id]
             detected_object = detected_objects[detect_object_id]
             tracked_object.update_state(detected_object)
         
         # State 3: Remove non matched trakced objects
         # Convert unmatched_tracked to a set for faster lookup
+        unmatched_tracked = [row_ids[id] for id in unmatched_tracked]
         unmatched_tracked_set = set(unmatched_tracked)
         print(f"unmatched tracked objects: {unmatched_tracked}")
-        object_container = [tracked_object for id, tracked_object in enumerate(object_container) if id not in unmatched_tracked_set]
+        object_container = {id:tracked_object for id, tracked_object in object_container.items() if id not in unmatched_tracked_set}
 
         # State 4: Add non matched detected objects to tracking
         unmatched_detected_ids = []
@@ -260,13 +250,13 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
                 non_matched_object.color,
                 id_counter  # New ID for tracked object
             )
-            object_container.append(new_tracked_object)
+            object_container[id_counter] = new_tracked_object
             unmatched_detected_ids.append(id_counter)
             id_counter += 1
 
         print(f"unmatched detected objects: {unmatched_detected_ids}")
         
-        return object_container, matches
+        return object_container, matches, matches_decoded
 
 def filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices):
     matches = []
@@ -274,6 +264,8 @@ def filter_false_matches(detected_objects, object_container, cost_threshold, cos
     unmatched_detected = set(range(len(detected_objects)))
         
     for row, col in zip(row_indices, col_indices):
+        row = int(row)
+        col = int(col)
         if cost_matrix[row, col] < cost_threshold:
             matches.append((row, col))
             unmatched_tracked.discard(row)
@@ -284,8 +276,6 @@ def filter_false_matches(detected_objects, object_container, cost_threshold, cos
     return matches, unmatched_tracked, unmatched_detected
 
 def get_masked_image(frame, detection_output):
-    bboxes = detection_output[0]
-
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
 
     # VERSION MADE FOR YOLO OUTPUT WORKING PREVIOUS VERSION IN THE COMMITS
@@ -344,7 +334,7 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
     split_frame[frame.shape[0]:, :, :] = frame.copy()
     
     # Top frame - tracked objects
-    for obj in tracked_objects: 
+    for obj in tracked_objects.values(): 
         x = obj.position[-1][0]
         y = obj.position[-1][1]
         cv2.circle(
@@ -353,7 +343,7 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
         cv2.putText(split_frame, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
     
     # Bottom frame - detected objects
-    for obj in detected_objects:
+    for obj in detected_objects.values():
         x = obj.position[0][0]
         y = obj.position[0][1] + frame.shape[0]  # Offset y to place in bottom half
         cv2.circle(
@@ -371,9 +361,6 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
         end_point = (detected_obj.position[0][0], detected_obj.position[0][1] + frame.shape[0] - 10)
         
         cv2.line(split_frame, adjusted_start_point, end_point, (0, 255, 0), 2)
-    
-    
-    # print_objects(detected_objects)
 
     return split_frame
 

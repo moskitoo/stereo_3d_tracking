@@ -1,2 +1,3 @@
 data/*
 cost_matrices
+__pycache__
