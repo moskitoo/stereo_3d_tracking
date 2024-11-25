@@ -7,6 +7,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.optimize import linear_sum_assignment
 import pandas as pd
 from datetime import datetime
+import torch
 
 
 id_counter = 0
@@ -38,10 +39,16 @@ class TrackedObject:
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
-        self.left = bbox_left
-        self.top = bbox_top
-        self.right = bbox_right
-        self.bottom = bbox_bottom
+        if type(bbox_left) == torch.Tensor:
+            self.left = int(bbox_left.item())
+            self.top = int(bbox_top.item())
+            self.right = int(bbox_right.item())
+            self.bottom = int(bbox_bottom.item())
+        else:
+            self.left = bbox_left
+            self.top = bbox_top
+            self.right = bbox_right
+            self.bottom = bbox_bottom
 
         self.width = self.right - self.left
         self.height = self.bottom - self.top
@@ -54,6 +61,13 @@ class BoundingBox:
         self.position = np.array((x, y)).astype(int)
 
     def get_bbox_img(self, frame):
+
+        print(frame.shape)
+        print(self.top)
+        print(self.bottom)
+        print(self.left)
+        print(self.right)
+
         return frame[self.top:self.bottom, self.left:self.right]
     
     def get_bbox_area(self):
@@ -101,6 +115,27 @@ def detect_objects(frame, detection_output):
         bbox_obj = BoundingBox(*bbox)
 
         cropped_frame = bbox_obj.get_bbox_img(frame)
+        frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
+        kp, des = sift.detectAndCompute(frame_gray, None)
+
+        if des is None:
+            features = np.zeros(128)
+        else:
+            features = np.mean(des, axis=0)
+
+        detected_objects.append(TrackedObject(obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id))
+
+    return detected_objects
+
+def detect_objects_yolo(frame, detection_output):
+    sift = cv2.SIFT_create()
+    detected_objects = []
+    print(type(detection_output))
+    for id, [bbox, obj_type] in enumerate(zip(detection_output.boxes.xyxy, detection_output.boxes.cls)):
+        bbox_obj = BoundingBox(*bbox)
+
+        cropped_frame = bbox_obj.get_bbox_img(frame)
+
         frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
         kp, des = sift.detectAndCompute(frame_gray, None)
 
