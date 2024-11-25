@@ -156,7 +156,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
     # Added extra dimension for total cost
     cost_matrix_detailed = np.zeros((num_tracked, num_detections, 6))
-    
+
     for i, tracked_object in enumerate(object_container):
         for j, detected_object in enumerate(detected_objects):
             # Position cost
@@ -228,7 +228,7 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
         # print(f"detected objects: {len(detected_objects)}")
         # print(f"tracked objects: {len(object_container)}")
         # print(f"cost_matrix: {cost_matrix.shape}")
-        print(f"Matches:         {matches}")
+        # print(f"Matches:         {matches}")
         # print(f"unmatched_tracked: {unmatched_tracked}")
         # print(f"unmatched_detected: {unmatched_detected}")
         matches_decoded = [(object_container[tr_id].id, detected_objects[det_id].id) for (tr_id, det_id) in matches]
@@ -288,28 +288,28 @@ def get_masked_image(frame, detection_output):
 
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
 
-    for bbox in bboxes:
-        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
-        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
-        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
+    # VERSION MADE FOR YOLO OUTPUT WORKING PREVIOUS VERSION IN THE COMMITS
+    for id, [bbox, obj_type] in enumerate(zip(detection_output.boxes.xyxy, detection_output.boxes.cls)):
+        bbox_obj = BoundingBox(*bbox)
 
-        mask[bbox_top:bbox_bottom, bbox_left:bbox_right] = 255
+        mask[bbox_obj.top:bbox_obj.bottom, bbox_obj.left:bbox_obj.right] = 255
 
     masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
     return masked_frame
 
 def draw_bounding_boxes(frame, detection_output):
-    bboxes = detection_output[0]
 
-    for bbox in bboxes:
-        # Extract bounding box coordinates
-        [bbox_left, bbox_top, bbox_right, bbox_bottom] = bbox
-        bbox_left, bbox_top = int(bbox_left), int(bbox_top)
-        bbox_right, bbox_bottom = int(bbox_right), int(bbox_bottom)
+    for id, [bbox, obj_type] in enumerate(zip(detection_output.boxes.xyxy, detection_output.boxes.cls)):
+        bbox_obj = BoundingBox(*bbox)
+
+        left = bbox_obj.left
+        top = bbox_obj.top
+        right = bbox_obj.right
+        bottom = bbox_obj.bottom
 
         # Draw the bounding box on the frame
-        cv2.rectangle(frame, (bbox_left, bbox_top), (bbox_right, bbox_bottom), color=(0, 255, 0), thickness=2)
+        cv2.rectangle(frame, (left, top), (right, bottom), color=(0, 255, 0), thickness=2)
 
     return frame
 
