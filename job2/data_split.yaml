@@ -1,0 +1,21 @@
+# Data Split yaml file
+train: /zhome/c7/f/213256/pfas/bdd100k/images/100k/train
+val: 
+  - /zhome/c7/f/213256/pfas/Rectified_images/seq_01/image_02/images/data
+  - /zhome/c7/f/213256/pfas/Rectified_images/seq_02/image_02/images/data
+test: /zhome/c7/f/213256/pfas/Rectified_images/seq_03/image_02/data
+
+nc: 3
+names: ["pedestrian", "cyclist", "car"]
+
+# augment:
+#   hsv_h: 0.015  # Hue augmentation
+#   hsv_s: 0.7    # Saturation augmentation
+#   hsv_v: 0.4    # Value augmentation
+#   translate: 0.1  # Translation augmentation
+#   scale: 0.5     # Scale augmentation
+#   shear: 2.0     # Shear augmentation
+#   perspective: 0.0  # Perspective transformation
+#   flipud: 0.0     # Vertical flip probability
+#   fliplr: 0.5     # Horizontal flip probability
+  
