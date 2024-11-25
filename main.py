@@ -133,7 +133,7 @@ class ObjectTracker:
             cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with matched objects", frame_with_matched_objects)
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
