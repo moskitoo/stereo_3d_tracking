@@ -8,8 +8,8 @@ class DepthManager():
             minDisparity=0,
             numDisparities=16 * 6,  # Must be divisible by 16
             blockSize=7,
-            P1=8 * 3 * 7**2,  # 8 * number_of_channels * blockSize^2
-            P2=32 * 3 * 7**2,  # 32 * number_of_channels * blockSize^2
+            P1=8 * 1 * 7**2,  # 8 * number_of_channels * blockSize^2
+            P2=32 * 1 * 7**2,  # 32 * number_of_channels * blockSize^2
             disp12MaxDiff=1,
             uniquenessRatio=10,
             speckleWindowSize=100,
