@@ -141,15 +141,24 @@ def detect_objects_yolo(frame, detection_output):
 
     return detected_objects
 
-def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, feat_w=0.1):
+def IOU(box1,box2):
+    max_x1 = box1.right
+    max_y1 = box1.bottom
+    min_x2 = box2.left
+    min_y2 = box2.top
+    intersection = (min_y2-max_y1) * (min_x2-max_x1)
+    iou = intersection / (box1.get_bbox_area() + box2.get_bbox_area() - intersection)
+    return max(iou, 0)
+
+def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=0.5, feat_w=1.0):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
     cost_matrix = np.zeros((num_tracked, num_detections))
     
     # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
     # Added extra dimension for total cost
-    cost_matrix_detailed = np.zeros((num_tracked, num_detections, 6))
-    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 6))
+    cost_matrix_detailed = np.zeros((num_tracked, num_detections, 4))
+    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 4))
 
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
@@ -163,6 +172,9 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
             
             # Bbox shape cost
             shape_cost = abs(tracked_object.bbox.get_bbox_aspect_ratio() - detected_object.bbox.get_bbox_aspect_ratio())
+
+            #IoU cost
+            iou_cost = 1 - IOU(tracked_object.bbox, detected_object.bbox)
             
             # Feature cost
             feat_cost = 1 - cosine_similarity([tracked_object.features], [detected_object.features])[0, 0]
@@ -171,12 +183,12 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
             class_cost = 0 if tracked_object.type == detected_object.type else 100
             
             # Calculate total cost
-            total_cost = pos_w * pos_cost + bbox_area_w * bbox_area_cost + bbox_shape_w * shape_cost + feat_w * feat_cost + class_cost
+            total_cost = iou_w * iou_cost + feat_w * feat_cost + class_cost
             cost_matrix[i, j] = total_cost
             
             # Store detailed costs including total cost
-            detailed_cost = [pos_w * pos_cost, bbox_area_w * bbox_area_cost, bbox_shape_w * shape_cost, feat_w * feat_cost, class_cost, total_cost]
-            detailed_cost_not_scaled = [pos_cost, bbox_area_cost, shape_cost, feat_cost, class_cost, total_cost]
+            detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, class_cost, total_cost]
+            detailed_cost_not_scaled = [iou_cost, feat_cost, class_cost, total_cost]
             cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
             cost_matrix_detailed_not_scaled[i, j] = [round(x,2) for x in detailed_cost_not_scaled]
     
