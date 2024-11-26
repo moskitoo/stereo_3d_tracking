@@ -141,7 +141,7 @@ def detect_objects_yolo(frame, detection_output):
 
     return detected_objects
 
-def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0.3, bbox_shape_w=0.2, feat_w=0.1):
+def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, feat_w=0.1):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
     cost_matrix = np.zeros((num_tracked, num_detections))
@@ -149,6 +149,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
     # Added extra dimension for total cost
     cost_matrix_detailed = np.zeros((num_tracked, num_detections, 6))
+    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 6))
 
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
@@ -174,8 +175,10 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
             cost_matrix[i, j] = total_cost
             
             # Store detailed costs including total cost
-            detailed_cost = [pos_cost, bbox_area_cost, shape_cost, feat_cost, class_cost, total_cost]
+            detailed_cost = [pos_w * pos_cost, bbox_area_w * bbox_area_cost, bbox_shape_w * shape_cost, feat_w * feat_cost, class_cost, total_cost]
+            detailed_cost_not_scaled = [pos_cost, bbox_area_cost, shape_cost, feat_cost, class_cost, total_cost]
             cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
+            cost_matrix_detailed_not_scaled[i, j] = [round(x,2) for x in detailed_cost_not_scaled]
     
     row_ids = object_container.keys()
     column_ids = detected_objects.keys()
@@ -185,6 +188,10 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     # print(pd.DataFrame(cost_matrix_detailed.reshape(num_tracked, num_detections * 6), 
     #                   index=row_ids, 
     #                   columns=column_ids * 6))
+
+    print(f"Current frame number: {current_frame_number}")
+    print(pd.DataFrame(cost_matrix_detailed[0]))
+    print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
 
     cost_matrix_storage.append({
         'frame': current_frame_number,  # You'll need to make current_frame_number accessible
@@ -198,8 +205,9 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     
     return cost_matrix, list(row_ids), list(column_ids)
 
-def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0, unmatched_threshold=5):
+def match_objects(detected_objects, object_container, cost_threshold=100.0, unmatched_threshold=5):
     global id_counter
+    global current_frame_number  
 
     # State 1: If no objects exist, create the first one
     if not object_container:
@@ -217,7 +225,7 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
 
         return object_container, [], []
     else:
-        cost_matrix, row_ids, column_ids = get_cost_matrix(detected_objects, object_container, pos_w, bbox_area_w, bbox_shape_w, feat_w)
+        cost_matrix, row_ids, column_ids = get_cost_matrix(detected_objects, object_container)
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
         matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
@@ -265,6 +273,8 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
             id_counter += 1
 
         print(f"unmatched detected objects: {unmatched_detected_ids}")
+
+        current_frame_number += 1 
         
         return object_container, matches, matches_decoded
 
