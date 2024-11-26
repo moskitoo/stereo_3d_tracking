@@ -142,13 +142,24 @@ def detect_objects_yolo(frame, detection_output):
     return detected_objects
 
 def IOU(box1,box2):
-    max_x1 = box1.right
-    max_y1 = box1.bottom
-    min_x2 = box2.left
-    min_y2 = box2.top
-    intersection = (min_y2-max_y1) * (min_x2-max_x1)
-    iou = intersection / (box1.get_bbox_area() + box2.get_bbox_area() - intersection)
-    return max(iou, 0)
+    x1 = max(box1.left, box2.left)
+    y1 = max(box1.top, box2.top)
+    x2 = min(box1.right, box2.right)
+    y2 = min(box1.bottom, box2.bottom)
+
+    intersection_width = max(0, x2 - x1)
+    intersection_height = max(0, y2 - y1)
+    
+    intersection = intersection_width * intersection_height
+    
+    union = box1.get_bbox_area() + box2.get_bbox_area() - intersection
+    
+    if union == 0:
+        return 0
+    
+    iou = intersection / union
+    
+    return iou
 
 def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=0.5, feat_w=1.0):
     num_tracked = len(object_container)
@@ -217,7 +228,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
     
     return cost_matrix, list(row_ids), list(column_ids)
 
-def match_objects(detected_objects, object_container, cost_threshold=100.0, unmatched_threshold=5):
+def match_objects(detected_objects, object_container, cost_threshold=0.6, unmatched_threshold=5):
     global id_counter
     global current_frame_number  
 
@@ -240,12 +251,18 @@ def match_objects(detected_objects, object_container, cost_threshold=100.0, unma
         cost_matrix, row_ids, column_ids = get_cost_matrix(detected_objects, object_container)
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
-        matches, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
+        print(cost_matrix)
+
+        print(f"rows: {row_indices}")
+        print(f"cols: {col_indices}")
+
+        matches, matches_nonfiltered, unmatched_tracked, unmatched_detected = filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices)
 
         matches_decoded = []
         for match in matches:
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
+        print(f"matches_nonfiltered: {matches_nonfiltered}")
         print(f"matches: {matches}")
         print(f"matches decoded: {matches_decoded}")
 
@@ -292,6 +309,7 @@ def match_objects(detected_objects, object_container, cost_threshold=100.0, unma
 
 def filter_false_matches(detected_objects, object_container, cost_threshold, cost_matrix, row_indices, col_indices):
     matches = []
+    matches_unfiltered = []
     unmatched_tracked = set(range(len(object_container)))
     unmatched_detected = set(range(len(detected_objects)))
         
@@ -302,10 +320,11 @@ def filter_false_matches(detected_objects, object_container, cost_threshold, cos
             matches.append((row, col))
             unmatched_tracked.discard(row)
             unmatched_detected.discard(col)
+        matches_unfiltered.append((row, col))
         
     unmatched_tracked = list(unmatched_tracked)
     unmatched_detected = list(unmatched_detected)
-    return matches, unmatched_tracked, unmatched_detected
+    return matches, matches_unfiltered, unmatched_tracked, unmatched_detected
 
 def get_masked_image(frame, detection_output):
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
