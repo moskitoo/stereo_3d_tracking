@@ -60,7 +60,7 @@ class ObjectTracker:
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
 
-    def extend_tracked_position_to_3d(self):
+    def extend_tracked_position_to_3d(self, disparity):
         pass
 
 
