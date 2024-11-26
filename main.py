@@ -36,6 +36,9 @@ class ObjectTracker:
             frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
 
+            for tracked_obj in self.object_container.values():
+                print(f"id: {tracked_obj.id} - counter: {tracked_obj.unmatched_counter}")
+
             # Visualization
             frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
             frame_with_matched_objects = visualize_matched_objects(raw_image, self.object_container, detected_objects, matches_decoded)

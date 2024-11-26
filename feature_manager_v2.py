@@ -24,6 +24,7 @@ class TrackedObject:
         self.features = features
         self.color = color
         self.id = id
+        self.unmatched_counter = 0
 
 
     def __getattribute__(self, name):
@@ -34,6 +35,7 @@ class TrackedObject:
         self.position.append(detected_object.position[0])
         self.bbox = detected_object.bbox
         self.features = detected_object.features
+        self.unmatched_counter = 0
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -196,7 +198,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.4, bbox_area_w=0
     
     return cost_matrix, list(row_ids), list(column_ids)
 
-def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0):
+def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3, bbox_shape_w=0.3, feat_w=0.1, cost_threshold=100.0, unmatched_threshold=5):
     global id_counter
 
     # State 1: If no objects exist, create the first one
@@ -224,6 +226,9 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
         for match in matches:
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
+        print(f"matches: {matches}")
+        print(f"matches decoded: {matches_decoded}")
+
         # State 2: Match with existing objects
         for tracked_object_id, detect_object_id in matches_decoded:
             tracked_object = object_container[tracked_object_id]
@@ -235,7 +240,12 @@ def match_objects(detected_objects, object_container, pos_w=0.6, bbox_area_w=0.3
         unmatched_tracked = [row_ids[id] for id in unmatched_tracked]
         unmatched_tracked_set = set(unmatched_tracked)
         print(f"unmatched tracked objects: {unmatched_tracked}")
-        object_container = {id:tracked_object for id, tracked_object in object_container.items() if id not in unmatched_tracked_set}
+
+        # Remove unmatched objects after several unsuccessful matches
+        for unmatched_id in unmatched_tracked_set:
+            object_container[unmatched_id].unmatched_counter += 1
+
+        object_container = {id:tracked_object for id, tracked_object in object_container.items() if tracked_object.unmatched_counter < unmatched_threshold}
 
         # State 4: Add non matched detected objects to tracking
         unmatched_detected_ids = []
