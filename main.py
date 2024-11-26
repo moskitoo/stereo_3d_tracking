@@ -3,14 +3,7 @@ import cv2
 from typing import List, Tuple
 from tqdm import tqdm
 
-from feature_manager_v2 import (
-    detect_objects_yolo, 
-    visualize_objects, 
-    match_objects, 
-    visualize_matched_objects, 
-    get_masked_image, 
-    combine_frames
-)
+from feature_manager_v2 import *
 
 from object_detection import *
 from depth_image_manager import *
@@ -31,25 +24,32 @@ class ObjectTracker:
         self.disparity = disparity
 
         # Detect objects
-        detection_output = self.object_detector.detect_objects(path)
-        detected_objects = detect_objects_yolo(raw_image, detection_output[0])
+        detection_outputs = self.object_detector.detect_objects(path)
 
-        # Track objects
-        frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
-        self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+        for detection_output in detection_outputs:
 
-        # Visualization
-        frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
-        frame_with_matched_objects = visualize_matched_objects(raw_image, self.object_container, detected_objects, matches_decoded)
-        masked_frame = get_masked_image(raw_image, detection_output[0])
-        
-        self.extend_tracked_position_to_3d(disparity)
+            # detection_output.show()
 
-        combined_frames = combine_frames([
-            frame_with_tracked_objects, 
-            frame_with_detected_objects, 
-            masked_frame
-        ])
+            detected_objects = detect_objects_yolo(raw_image, detection_output)
+
+            # Track objects
+            frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
+            self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+
+            # Visualization
+            frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
+            frame_with_matched_objects = visualize_matched_objects(raw_image, self.object_container, detected_objects, matches_decoded)
+            masked_frame = get_masked_image(raw_image, detection_output)
+            bbox_frame = draw_bounding_boxes(raw_image, detection_output)
+            
+            self.extend_tracked_position_to_3d(disparity)
+
+            combined_frames = combine_frames([
+                frame_with_tracked_objects, 
+                frame_with_detected_objects, 
+                masked_frame,
+                bbox_frame
+            ])
 
         return combined_frames, frame_with_matched_objects
 
@@ -81,14 +81,14 @@ class ObjectTracker:
             cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with matched objects", frame_with_matched_objects)
 
-            cv2.imshow('Disparity Map', disparity)
+            # cv2.imshow('Disparity Map', disparity)
 
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 

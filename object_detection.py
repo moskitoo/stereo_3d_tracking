@@ -99,6 +99,7 @@ class ObjectDetector:
         """Perform object detection on an image."""
         return self.model.predict(
             task='detect',
+            conf=0.4,
             source=image_path,
             imgsz=640,
             save=False,
