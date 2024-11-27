@@ -51,7 +51,7 @@ class TrackedObject:
         update = self.kalman_tracker.update(kalman_position)
         self.kalman_position = (int(update[0, 0]), int(update[3, 0]))
         self.kalman_velocity = (int(update[1, 0]), int(update[4, 0]))
-        self.kalman_pred_position = (self.kalman_position[0] + self.kalman_velocity[0], self.kalman_position[1] + self.kalman_velocity[1])
+        self.kalman_pred_position = np.array([self.kalman_position[0] + self.kalman_velocity[0], self.kalman_position[1] + self.kalman_velocity[1]])
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -94,9 +94,11 @@ def visualize_objects(frame, tracked_objects):
         x = obj.position[-1][0]
         y = obj.position[-1][1]
 
-        print(f"kalman position: {obj.kalman_position}")
-        print(f"kalman velocity: {obj.kalman_velocity}")
-        print(f"kalman position predicted: {obj.kalman_pred_position}")
+        if obj.id == 0:
+            print(f"position (t): {obj.position}")
+            print(f"kalman position: {obj.kalman_position}")
+            print(f"kalman velocity: {obj.kalman_velocity}")
+            print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
         dx = obj.kalman_pred_position[0] - obj.kalman_position[0]
@@ -194,15 +196,16 @@ def IOU(box1,box2):
     
     return iou
 
-def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=0.5, feat_w=1.0):
+def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=0.5, feat_w=0.5, kalman_vector_w=0.0001):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
     cost_matrix = np.zeros((num_tracked, num_detections))
     
     # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
     # Added extra dimension for total cost
-    cost_matrix_detailed = np.zeros((num_tracked, num_detections, 4))
-    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 4))
+    cost_matrix_detailed = np.zeros((num_tracked, num_detections, 5))
+    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 5))
+    cost_matrix_basic = np.zeros((num_tracked, num_detections, 3))
 
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
@@ -222,17 +225,28 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
             
             # Feature cost
             feat_cost = 1 - cosine_similarity([tracked_object.features], [detected_object.features])[0, 0]
+
+            # Kalman orientation cost
+            # obj.kalman_position
+            kalman_vector = tracked_object.kalman_pred_position - tracked_object.position[0]
+            detection_vector = detected_object.position[0] - tracked_object.position[0]
+            kalman_orient_cost = 1 - cosine_similarity([kalman_vector], [detection_vector])[0, 0]
+            kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
             
             # Class cost
             class_cost = 0 if tracked_object.type == detected_object.type else 100
             
             # Calculate total cost
-            total_cost = iou_w * iou_cost + feat_w * feat_cost + class_cost
+            total_cost = iou_w * iou_cost + feat_w * feat_cost + kalman_vector_w * kalman_euc_cost + class_cost
             cost_matrix[i, j] = total_cost
             
             # Store detailed costs including total cost
-            detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, class_cost, total_cost]
-            detailed_cost_not_scaled = [iou_cost, feat_cost, class_cost, total_cost]
+            # detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, class_cost, total_cost]
+            # detailed_cost_not_scaled = [iou_cost, feat_cost, class_cost, total_cost]
+            detailed_cost_basic = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost]
+            detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost, class_cost, total_cost]
+            detailed_cost_not_scaled = [iou_cost, feat_cost, kalman_euc_cost, class_cost, total_cost]
+            cost_matrix_basic[i, j] = [round(x,2) for x in detailed_cost_basic]
             cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
             cost_matrix_detailed_not_scaled[i, j] = [round(x,2) for x in detailed_cost_not_scaled]
     
@@ -241,13 +255,16 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
     pd.options.display.float_format = '{:,.2f}'.format
     
     # Print detailed costs with total cost included
-    # print(pd.DataFrame(cost_matrix_detailed.reshape(num_tracked, num_detections * 6), 
-    #                   index=row_ids, 
-    #                   columns=column_ids * 6))
+    print(pd.DataFrame(cost_matrix_basic.reshape(num_tracked, num_detections * 3), 
+                      index=row_ids, 
+                      columns=list(column_ids) * 3))
 
-    # print(f"Current frame number: {current_frame_number}")
+    print(f"Current frame number: {current_frame_number}")
     # print(pd.DataFrame(cost_matrix_detailed[0]))
+    # print(pd.DataFrame(cost_matrix_detailed[1]))
     # print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
+    # print(pd.DataFrame(cost_matrix_detailed_not_scaled[1]))
+    print(pd.DataFrame(cost_matrix_basic[0]))
 
     cost_matrix_storage.append({
         'frame': current_frame_number,  # You'll need to make current_frame_number accessible
@@ -295,9 +312,15 @@ def match_objects(detected_objects, object_container, cost_threshold=0.6, unmatc
         for match in matches:
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
+
+        matches_cost = []
+        for row, col in zip(row_indices, col_indices):
+            matches_cost.append(round(float(cost_matrix[row, col]), 2))
+
+        print(f"matches_cost:        {matches_cost}")
         print(f"matches_nonfiltered: {matches_nonfiltered}")
-        print(f"matches: {matches}")
-        print(f"matches decoded: {matches_decoded}")
+        print(f"matches:             {matches}")
+        print(f"matches decoded:     {matches_decoded}")
 
         # State 2: Match with existing objects
         for tracked_object_id, detect_object_id in matches_decoded:
