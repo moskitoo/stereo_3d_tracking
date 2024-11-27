@@ -28,6 +28,8 @@ class TrackedObject:
         self.id = id
         self.unmatched_counter = 0
         self.kalman_tracker = KalmanTracker()
+        self.kalman_tracker.X[0] = position[0]
+        self.kalman_tracker.X[3] = position[1]
         self.kalman_position = (0, 0)
         self.kalman_velocity = (0, 0)
         self.kalman_pred_position = (0, 0)
@@ -44,6 +46,7 @@ class TrackedObject:
         self.unmatched_counter = 0
         x = detected_object.position[0][0]
         y = detected_object.position[0][1]
+
         kalman_position = np.array([[x], [y]])
         update = self.kalman_tracker.update(kalman_position)
         self.kalman_position = (int(update[0, 0]), int(update[3, 0]))
@@ -84,8 +87,6 @@ class BoundingBox:
 
 def visualize_objects(frame, tracked_objects):
     frame_copy = frame.copy()
-    kalman_frame = frame.copy()
-
 
     counter = 0
     # Display features for each object in its unique color
@@ -94,6 +95,7 @@ def visualize_objects(frame, tracked_objects):
         y = obj.position[-1][1]
 
         print(f"kalman position: {obj.kalman_position}")
+        print(f"kalman velocity: {obj.kalman_velocity}")
         print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
@@ -106,7 +108,7 @@ def visualize_objects(frame, tracked_objects):
             obj.kalman_position[1] + dy * 1
         )
 
-        cv2.arrowedLine(kalman_frame, obj.kalman_position, extended_end, obj.color, 2)
+        cv2.arrowedLine(frame_copy, obj.kalman_position, extended_end, obj.color, 2)
 
         cv2.circle(
             frame_copy, (x, y), 10, obj.color, -1
@@ -115,7 +117,7 @@ def visualize_objects(frame, tracked_objects):
 
         counter += 1
     print(counter)
-    return frame_copy, kalman_frame
+    return frame_copy
 
 def get_rand_color():
     return tuple(random.randint(0, 255) for _ in range(3))
