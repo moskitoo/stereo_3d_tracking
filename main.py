@@ -15,6 +15,7 @@ class ObjectTracker:
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
         self.object_container = {}
+        self.previous_frame = None
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -33,12 +34,12 @@ class ObjectTracker:
             detected_objects = detect_objects_yolo(raw_image, detection_output)
 
             # Track objects
-            frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
+            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
 
             # Visualization
-            frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
-            frame_with_matched_objects = visualize_matched_objects(raw_image, self.object_container, detected_objects, matches_decoded)
+            # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
+            frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded)
             masked_frame = get_masked_image(raw_image, detection_output)
             bbox_frame = draw_bounding_boxes(raw_image, detection_output)
             
@@ -46,7 +47,7 @@ class ObjectTracker:
 
             combined_frames = combine_frames([
                 frame_with_tracked_objects, 
-                frame_with_detected_objects, 
+                # frame_with_detected_objqects, 
                 masked_frame,
                 bbox_frame
             ])
@@ -71,9 +72,12 @@ class ObjectTracker:
             left_raw_img = self.process_raw_image(left_raw_img)
             right_raw_img = self.process_raw_image(right_raw_img)
 
+            if self.previous_frame is None:
+                self.previous_frame = left_raw_img.copy()
+
             disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
 
-            combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path, disparity)
+            combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img.copy(), left_img_path, disparity)
 
             cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with combined_frames", combined_frames)
@@ -83,7 +87,9 @@ class ObjectTracker:
 
             # cv2.imshow('Disparity Map', disparity)
 
-            key = cv2.waitKey() & 0xFF
+            self.previous_frame = left_raw_img.copy()
+
+            key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 

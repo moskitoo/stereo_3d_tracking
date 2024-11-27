@@ -409,18 +409,22 @@ def combine_frames(frames):
     combined_frame = cv2.hconcat([column1_combined, column2_combined])
     return combined_frame
 
-def visualize_matched_objects(frame, tracked_objects, detected_objects, matches):
+def visualize_matched_objects(prev_frame, frame, tracked_objects, detected_objects, matches):
     # Create a frame twice the height of the original
     split_frame = np.zeros((frame.shape[0] * 2, frame.shape[1], 3), dtype=np.uint8)
     
     # Copy the original frame to the top half
-    split_frame[:frame.shape[0], :, :] = frame.copy()
+    split_frame[:frame.shape[0], :, :] = prev_frame.copy()
     split_frame[frame.shape[0]:, :, :] = frame.copy()
     
     # Top frame - tracked objects
-    for obj in tracked_objects.values(): 
-        x = obj.position[-1][0]
-        y = obj.position[-1][1]
+    for obj in tracked_objects.values():
+        if len(obj.position) > 1:
+            x = obj.position[-2][0]
+            y = obj.position[-2][1]
+        else:
+            x = obj.position[-1][0]
+            y = obj.position[-1][1]
         cv2.circle(
             split_frame, (x, y), 10, obj.color, -1
         )
@@ -440,7 +444,10 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
         tracked_obj = tracked_objects[tracked_idx]
         detected_obj = detected_objects[detected_idx]
         
-        start_point = tracked_obj.position[-1]
+        if len(tracked_obj.position) > 1:
+            start_point = tracked_obj.position[-2]
+        else:
+            start_point = tracked_obj.position[-1]
         adjusted_start_point = (start_point[0], start_point[1] + 10)
         end_point = (detected_obj.position[0][0], detected_obj.position[0][1] + frame.shape[0] - 10)
         
