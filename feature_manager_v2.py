@@ -196,7 +196,7 @@ def IOU(box1,box2):
     
     return iou
 
-def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=0.5, feat_w=0.5, kalman_vector_w=0.0001):
+def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w=0.4, bbox_shape_w=0.2, iou_w=1.0, feat_w=0.1, kalman_vector_w=1.0):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
     cost_matrix = np.zeros((num_tracked, num_detections))
@@ -208,44 +208,71 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
     cost_matrix_basic = np.zeros((num_tracked, num_detections, 3))
 
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
+        # Precompute normalization factors for the current tracked object
+        max_pos_cost = 0
+        max_bbox_area_cost = 0
+        max_kalman_euc_cost = 0
+
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
             # Position cost
             pos_cost = np.linalg.norm(tracked_object.position[0] - detected_object.position[0])
+            max_pos_cost = max(max_pos_cost, pos_cost)
             
             # Bbox area cost
             det_obj_area = detected_object.bbox.get_bbox_area()
             tracked_obj_area = tracked_object.bbox.get_bbox_area()
             bbox_area_cost = abs(tracked_obj_area - det_obj_area) / max(det_obj_area, tracked_obj_area)
+            max_bbox_area_cost = max(max_bbox_area_cost, bbox_area_cost)
+            
+            # Kalman orientation cost (Euclidean)
+            kalman_vector = tracked_object.kalman_pred_position - tracked_object.position[0]
+            detection_vector = detected_object.position[0] - tracked_object.position[0]
+            kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
+            max_kalman_euc_cost = max(max_kalman_euc_cost, kalman_euc_cost)
+
+        # Second pass: Normalize and compute total cost for the current tracked object
+        for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
+            # Position cost (normalized)
+            pos_cost = np.linalg.norm(tracked_object.position[0] - detected_object.position[0])
+            pos_cost_normalized = pos_cost / max_pos_cost if max_pos_cost > 0 else 0
+            
+            # Bbox area cost (normalized)
+            det_obj_area = detected_object.bbox.get_bbox_area()
+            tracked_obj_area = tracked_object.bbox.get_bbox_area()
+            bbox_area_cost = abs(tracked_obj_area - det_obj_area) / max(det_obj_area, tracked_obj_area)
+            bbox_area_cost_normalized = bbox_area_cost / max_bbox_area_cost if max_bbox_area_cost > 0 else 0
             
             # Bbox shape cost
             shape_cost = abs(tracked_object.bbox.get_bbox_aspect_ratio() - detected_object.bbox.get_bbox_aspect_ratio())
 
-            #IoU cost
+            # IoU cost
             iou_cost = 1 - IOU(tracked_object.bbox, detected_object.bbox)
             
             # Feature cost
             feat_cost = 1 - cosine_similarity([tracked_object.features], [detected_object.features])[0, 0]
 
-            # Kalman orientation cost
-            # obj.kalman_position
+            # Kalman orientation cost (normalized)
             kalman_vector = tracked_object.kalman_pred_position - tracked_object.position[0]
             detection_vector = detected_object.position[0] - tracked_object.position[0]
-            kalman_orient_cost = 1 - cosine_similarity([kalman_vector], [detection_vector])[0, 0]
             kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
+            kalman_euc_cost_normalized = kalman_euc_cost / max_kalman_euc_cost if max_kalman_euc_cost > 0 else 0
             
             # Class cost
             class_cost = 0 if tracked_object.type == detected_object.type else 100
             
             # Calculate total cost
-            total_cost = iou_w * iou_cost + feat_w * feat_cost + kalman_vector_w * kalman_euc_cost + class_cost
+            total_cost = (iou_w * iou_cost +
+                          kalman_vector_w * kalman_euc_cost_normalized +
+                          class_cost)
+
             cost_matrix[i, j] = total_cost
             
             # Store detailed costs including total cost
             # detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, class_cost, total_cost]
             # detailed_cost_not_scaled = [iou_cost, feat_cost, class_cost, total_cost]
-            detailed_cost_basic = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost]
-            detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost, class_cost, total_cost]
-            detailed_cost_not_scaled = [iou_cost, feat_cost, kalman_euc_cost, class_cost, total_cost]
+            detailed_cost_basic = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost_normalized]
+            detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, kalman_vector_w * kalman_euc_cost_normalized, class_cost, total_cost]
+            detailed_cost_not_scaled = [iou_cost, feat_cost, kalman_euc_cost_normalized, class_cost, total_cost]
             cost_matrix_basic[i, j] = [round(x,2) for x in detailed_cost_basic]
             cost_matrix_detailed[i, j] = [round(x,2) for x in detailed_cost]
             cost_matrix_detailed_not_scaled[i, j] = [round(x,2) for x in detailed_cost_not_scaled]
@@ -278,7 +305,7 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
     
     return cost_matrix, list(row_ids), list(column_ids)
 
-def match_objects(detected_objects, object_container, cost_threshold=0.6, unmatched_threshold=5):
+def match_objects(detected_objects, object_container, cost_threshold=2.0, unmatched_threshold=5):
     global id_counter
     global current_frame_number  
 
