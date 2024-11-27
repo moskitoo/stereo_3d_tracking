@@ -83,7 +83,7 @@ class ObjectTracker:
 
             # cv2.imshow('Disparity Map', disparity)
 
-            key = cv2.waitKey(0) & 0xFF
+            key = cv2.waitKey() & 0xFF
             if key == ord('q'):  # Quit
                 break
 

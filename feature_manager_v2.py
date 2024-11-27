@@ -9,6 +9,8 @@ import pandas as pd
 from datetime import datetime
 import torch
 
+from kalman_filter import KalmanTracker
+
 
 id_counter = 0
 current_frame_number = 0
@@ -25,6 +27,10 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.kalman_tracker = KalmanTracker()
+        self.kalman_position = (0, 0)
+        self.kalman_velocity = (0, 0)
+        self.kalman_pred_position = (0, 0)
 
 
     def __getattribute__(self, name):
@@ -36,6 +42,13 @@ class TrackedObject:
         self.bbox = detected_object.bbox
         self.features = detected_object.features
         self.unmatched_counter = 0
+        x = detected_object.position[0][0]
+        y = detected_object.position[0][1]
+        kalman_position = np.array([[x], [y]])
+        update = self.kalman_tracker.update(kalman_position)
+        self.kalman_position = (int(update[0, 0]), int(update[3, 0]))
+        self.kalman_velocity = (int(update[1, 0]), int(update[4, 0]))
+        self.kalman_pred_position = (self.kalman_position[0] + self.kalman_velocity[0], self.kalman_position[1] + self.kalman_velocity[1])
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -71,12 +84,30 @@ class BoundingBox:
 
 def visualize_objects(frame, tracked_objects):
     frame_copy = frame.copy()
+    kalman_frame = frame.copy()
+
 
     counter = 0
     # Display features for each object in its unique color
     for obj in tracked_objects.values():
         x = obj.position[-1][0]
         y = obj.position[-1][1]
+
+        print(f"kalman position: {obj.kalman_position}")
+        print(f"kalman position predicted: {obj.kalman_pred_position}")
+
+        # Calculate a longer arrow by extending the line
+        dx = obj.kalman_pred_position[0] - obj.kalman_position[0]
+        dy = obj.kalman_pred_position[1] - obj.kalman_position[1]
+        
+        # Multiply the difference by a scaling factor (e.g., 3)
+        extended_end = (
+            obj.kalman_position[0] + dx * 1, 
+            obj.kalman_position[1] + dy * 1
+        )
+
+        cv2.arrowedLine(kalman_frame, obj.kalman_position, extended_end, obj.color, 2)
+
         cv2.circle(
             frame_copy, (x, y), 10, obj.color, -1
         )
@@ -84,7 +115,7 @@ def visualize_objects(frame, tracked_objects):
 
         counter += 1
     print(counter)
-    return frame_copy
+    return frame_copy, kalman_frame
 
 def get_rand_color():
     return tuple(random.randint(0, 255) for _ in range(3))
@@ -212,9 +243,9 @@ def get_cost_matrix(detected_objects, object_container, pos_w=0.006, bbox_area_w
     #                   index=row_ids, 
     #                   columns=column_ids * 6))
 
-    print(f"Current frame number: {current_frame_number}")
-    print(pd.DataFrame(cost_matrix_detailed[0]))
-    print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
+    # print(f"Current frame number: {current_frame_number}")
+    # print(pd.DataFrame(cost_matrix_detailed[0]))
+    # print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
 
     cost_matrix_storage.append({
         'frame': current_frame_number,  # You'll need to make current_frame_number accessible
