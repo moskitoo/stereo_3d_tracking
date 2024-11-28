@@ -31,9 +31,9 @@ class TrackedObject:
         self.kalman_tracker = KalmanTracker()
         self.kalman_tracker.X[0] = position[0]
         self.kalman_tracker.X[3] = position[1]
-        self.kalman_position = (0, 0)
-        self.kalman_velocity = (0, 0)
-        self.kalman_pred_position = (0, 0)
+        self.kalman_position = [position]
+        self.kalman_velocity = [position]
+        self.kalman_pred_position = [position]
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
@@ -48,12 +48,12 @@ class TrackedObject:
 
         kalman_position = np.array([[x], [y]])
         update = self.kalman_tracker.update(kalman_position)
-        self.kalman_position = (int(update[0, 0]), int(update[3, 0]))
-        self.kalman_velocity = (int(update[1, 0]), int(update[4, 0]))
-        self.kalman_pred_position = np.array(
+        self.kalman_position.append((int(update[0, 0]), int(update[3, 0])))
+        self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
+        self.kalman_pred_position.append(
             [
-                self.kalman_position[0] + self.kalman_velocity[0],
-                self.kalman_position[1] + self.kalman_velocity[1],
+                self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
+                self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
             ]
         )
 
@@ -100,20 +100,20 @@ def visualize_objects(frame, tracked_objects):
         x = obj.position[-1][0]
         y = obj.position[-1][1]
 
-        if obj.id == 0:
+        if obj.id < 5:
             print(f"position (t): {obj.position}")
             print(f"kalman position: {obj.kalman_position}")
             print(f"kalman velocity: {obj.kalman_velocity}")
             print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
-        dx = obj.kalman_pred_position[0] - obj.kalman_position[0]
-        dy = obj.kalman_pred_position[1] - obj.kalman_position[1]
+        dx = obj.kalman_pred_position[-1][0] - obj.kalman_position[-1][0]
+        dy = obj.kalman_pred_position[-1][1] - obj.kalman_position[-1][1]
 
         # Multiply the difference by a scaling factor (e.g., 3)
         extended_end = (
-            obj.kalman_position[0] + dx * 1,
-            obj.kalman_position[1] + dy * 1,
+            obj.kalman_position[-1][0] + dx * 1,
+            obj.kalman_position[-1][1] + dy * 1,
         )
 
         if len(obj.position) >= 5:
@@ -215,6 +215,25 @@ def detect_objects_yolo(frame, detection_output):
 
     return detected_objects
 
+def apply_nms(detected_objects, nms_iou_threshold):
+    # Convert to list for easier sorting and processing
+    objects_list = list(detected_objects.items())
+    
+    objects_to_keep = []
+    
+    while objects_list:
+        # Take the object with highest confidence
+        current_idx, current_obj = objects_list.pop(0)
+        objects_to_keep.append((current_idx, current_obj))
+        
+        # Remove objects with high IOU
+        objects_list = [
+            (idx, obj) for (idx, obj) in objects_list 
+            if IOU(current_obj.bbox, obj.bbox) <= nms_iou_threshold
+        ]
+    
+    # Convert back to dictionary
+    return dict(objects_to_keep)
 
 def IOU(box1, box2):
     x1 = max(box1.left, box2.left)

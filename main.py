@@ -33,6 +33,8 @@ class ObjectTracker:
 
             detected_objects = detect_objects_yolo(raw_image, detection_output)
 
+            detected_objects = apply_nms(detected_objects, 0.5)
+
             # Track objects
             frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
