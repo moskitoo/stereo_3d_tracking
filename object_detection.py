@@ -91,7 +91,7 @@ class ObjectDetector:
         self.dataset = ImageDataset(self.left_image_dir, self.right_image_dir, transform=self.transform)
         self.dataloader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
-        model_path = "/home/moskit/dtu/stereo_3d_tracking/job2/runs/detect/train/weights/best.pt"
+        model_path = "job2/runs/detect/train/weights/best.pt"
         self.model = YOLO(model_path).to(self.device)
         self.model.eval()
 
