@@ -116,8 +116,15 @@ def visualize_objects(frame, tracked_objects):
             obj.kalman_position[1] + dy * 1,
         )
 
-        cv2.arrowedLine(frame_copy, obj.kalman_position,
+        if len(obj.position) >= 5:
+            cv2.arrowedLine(frame_copy, obj.position[-5],
                         extended_end, obj.color, 2)
+            # take the oldest one when we dont have enough records
+        else: 
+            cv2.arrowedLine(frame_copy, obj.position[0],
+                        extended_end, obj.color, 2)
+        # cv2.arrowedLine(frame_copy, obj.kalman_position,
+        #                 extended_end, obj.color, 2)
 
         cv2.circle(frame_copy, (x, y), 10, obj.color, -1)
         cv2.putText(
@@ -239,7 +246,8 @@ def get_cost_matrix(
     iou_w=1.0,
     feat_w=0.1,
     kalman_vector_w=1.0,
-    iou_threshold=0.7,
+    iou_threshold=0.95,
+    past_pos_id = 5
 ):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
@@ -274,10 +282,17 @@ def get_cost_matrix(
             max_bbox_area_cost = max(max_bbox_area_cost, bbox_area_cost)
 
             # Kalman orientation cost (Euclidean)
-            kalman_vector = (
-                tracked_object.kalman_pred_position -
-                tracked_object.position[-1]
-            )
+            if len(tracked_object.position) >= past_pos_id:
+                kalman_vector = (
+                    tracked_object.kalman_pred_position -
+                    tracked_object.position[-past_pos_id]
+                )
+                # take the oldest one when we dont have enough records
+            else: 
+                kalman_vector = (
+                    tracked_object.kalman_pred_position -
+                    tracked_object.position[0]
+                )
             detection_vector = detected_object.position[0] - \
                 tracked_object.position[-1]
             kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
