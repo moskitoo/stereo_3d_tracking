@@ -32,7 +32,7 @@ class TrackedObject:
         self.kalman_tracker.X[0] = position[0]
         self.kalman_tracker.X[3] = position[1]
         self.kalman_position = [position]
-        self.kalman_velocity = [position]
+        self.kalman_velocity = [(0, 0)]
         self.kalman_pred_position = [position]
 
     def __getattribute__(self, name):
@@ -100,11 +100,11 @@ def visualize_objects(frame, tracked_objects):
         x = obj.position[-1][0]
         y = obj.position[-1][1]
 
-        if obj.id < 5:
-            print(f"position (t): {obj.position}")
-            print(f"kalman position: {obj.kalman_position}")
-            print(f"kalman velocity: {obj.kalman_velocity}")
-            print(f"kalman position predicted: {obj.kalman_pred_position}")
+        # if obj.id < 5:
+        #     print(f"position (t): {obj.position}")
+        #     print(f"kalman position: {obj.kalman_position}")
+        #     print(f"kalman velocity: {obj.kalman_velocity}")
+        #     print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
         dx = obj.kalman_pred_position[-1][0] - obj.kalman_position[-1][0]
@@ -541,6 +541,90 @@ def match_objects(
         current_frame_number += 1
 
         return object_container, matches, matches_decoded
+
+def correct_matches(object_container, match_correct_frame_no, drift_threshold):
+
+    mismatched_instances = []
+    for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
+        # Convert kalman_velocity to a numpy array for vectorized operations
+        velocity_array = np.array(tracked_object.kalman_velocity)
+
+        print(f"ID: {tracked_id}")
+        
+        print(f"velocities: {velocity_array}")
+
+        # Check the length of the velocity array
+        if len(velocity_array) < match_correct_frame_no:
+            # Not enough frames for a meaningful calculation
+            avg_kalman_vector = np.mean(velocity_array, axis=0)
+            print(f"velocities: {velocity_array}")
+        elif len(velocity_array) < 2 * match_correct_frame_no:
+            # Use the available frames before match_correct_frame_no
+            avg_kalman_vector = np.mean(velocity_array[:match_correct_frame_no], axis=0)
+            print(f"velocities: {velocity_array[:match_correct_frame_no]}")
+        else:
+            # Use the specified range for averaging
+            avg_kalman_vector = np.mean(velocity_array[-2 * match_correct_frame_no:-match_correct_frame_no], axis=0)
+            print(f"velocities: {velocity_array[-2 * match_correct_frame_no:-match_correct_frame_no]}")
+            print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
+
+        print(f"avg kalman vector: {avg_kalman_vector}")
+        
+        # Estimate position using average velocity
+        if len(tracked_object.position) < match_correct_frame_no:
+            estimated_position = tracked_object.position[0] + avg_kalman_vector * match_correct_frame_no
+        else:
+            estimated_position = tracked_object.position[-match_correct_frame_no] + avg_kalman_vector * match_correct_frame_no
+        print(f"Estimated position: {estimated_position}, Actual position: {tracked_object.position[-1]}")
+
+        drift = np.linalg.norm(estimated_position - tracked_object.position[-1])
+
+        if drift > drift_threshold:
+            mismatched_instances.append(tracked_object)
+
+        print(f"drift {drift}")
+
+    if len(mismatched_instances) == 0:
+        print("Didnt find any mismatches")
+    
+    cost_matrix = np.zeros((len(mismatched_instances), len(mismatched_instances)))
+
+    for i, row_obj in enumerate(mismatched_instances):
+        for j, col_obj in enumerate(mismatched_instances):
+            if i == j:
+                cost_matrix[i, j] = np.inf
+            else:
+                cost_matrix[i, j] = np.linalg.norm(row_obj.position[-1] - col_obj.position[-1])
+
+    print("mismatches cost matrix")
+    print(cost_matrix)
+    
+    if len(mismatched_instances) <= 1:
+        return
+    
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    print(f"rows: {row_indices}")
+    print(f"cols: {col_indices}")
+
+    matches = []
+    matches_decoded = []
+
+    for row, col in zip(row_indices, col_indices):
+        matches.append((row, col))
+        matches_decoded.append((mismatched_instances[row].id, mismatched_instances[col].id))
+
+    print(f"matches: {matches}")
+    print(f"matches_decoded: {matches_decoded}")
+
+    remached_instances = []
+    for (match_id_1, match_id_2) in matches_decoded:
+        if match_id_1 not in remached_instances:
+            object_buffer = object_container[match_id_1]
+            object_container[match_id_1].update_state(object_container[match_id_2])
+            object_container[match_id_2].update_state(object_buffer)
+
+            remached_instances.append(match_id_1)
 
 
 def filter_false_matches(

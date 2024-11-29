@@ -16,6 +16,9 @@ class ObjectTracker:
         self.depth_manager = DepthManager()
         self.object_container = {}
         self.previous_frame = None
+        self.frame_number = 0
+        self.match_correct_frame_no = 5
+        self.drift_threshold = 100
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -25,6 +28,7 @@ class ObjectTracker:
         self.disparity = disparity
 
         # Detect objects
+
         detection_outputs = self.object_detector.detect_objects(path)
 
         for detection_output in detection_outputs:
@@ -38,6 +42,12 @@ class ObjectTracker:
             # Track objects
             frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+
+            if self.frame_number % self.match_correct_frame_no == 0:
+                correct_matches(self.object_container, self.match_correct_frame_no, self.drift_threshold)
+            
+            for i, (tracked_id, tracked_object) in enumerate(self.object_container.items()):
+                print(tracked_object.kalman_velocity)
 
             # Visualization
             # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
@@ -90,6 +100,8 @@ class ObjectTracker:
             # cv2.imshow('Disparity Map', disparity)
 
             self.previous_frame = left_raw_img.copy()
+
+            self.frame_number += 1
 
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
