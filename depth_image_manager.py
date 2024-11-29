@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from numpy.ma.extras import average
 
 
 class DepthManager():
@@ -32,3 +33,6 @@ class DepthManager():
         disparity_normalized = cv2.normalize(disparity, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
         return disparity_normalized
+
+
+

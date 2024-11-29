@@ -15,6 +15,7 @@ current_frame_number = 0
 
 cost_matrix_storage = []
 SAVE_DIR = "cost_matrices"
+classes = ['Pedestrian','Cyclist','Car']
 
 class TrackedObject:
     def __init__(self, type, position, bbox, features, color, id):
@@ -321,6 +322,10 @@ def draw_bounding_boxes(frame, detection_output):
         # Draw the bounding box on the frame
         cv2.rectangle(frame, (left, top), (right, bottom), color=(0, 255, 0), thickness=2)
 
+        # cv2.putText(frame, detection_output.names[int(obj_type)], (int(left), int(top) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+        # cv2.putText(frame, "("+str(bbox_obj.position[1])+","+str(bbox_obj.position[0]+","+"a"+")"), (int(left), int(bottom) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+
+
     return frame
 
 def combine_frames(frames):
@@ -361,7 +366,10 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
             split_frame, (x, y), 10, obj.color, -1
         )
         cv2.putText(split_frame, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-    
+        cv2.putText(split_frame, classes[int(obj.type)], (int(obj.bbox.left), int(obj.bbox.top) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+        cv2.putText(split_frame, "("+str(obj.bbox.position[1])+","+str(obj.bbox.position[0])+","+str(int(obj.depth))+")", (int(obj.bbox.left), int(obj.bbox.bottom) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+
+
     # Bottom frame - detected objects
     for obj in detected_objects.values():
         x = obj.position[0][0]

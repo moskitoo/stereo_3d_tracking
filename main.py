@@ -35,6 +35,7 @@ class ObjectTracker:
             # Track objects
             frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+            self.get_object_3d_location()
 
             # Visualization
             frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
@@ -42,7 +43,6 @@ class ObjectTracker:
             masked_frame = get_masked_image(raw_image, detection_output)
             bbox_frame = draw_bounding_boxes(raw_image, detection_output)
             
-            self.extend_tracked_position_to_3d(disparity)
 
             combined_frames = combine_frames([
                 frame_with_tracked_objects, 
@@ -60,8 +60,13 @@ class ObjectTracker:
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
 
-    def extend_tracked_position_to_3d(self, disparity):
-        pass
+    def get_object_3d_location(self):
+        for object in self.object_container.items():
+            object_id = object[0]
+            bbox = object[1].bbox
+            average_depth = np.mean(self.disparity[bbox.position[1]-round(bbox.height/6):bbox.position[1]+round(bbox.height/6),
+                                    bbox.position[0]-round(bbox.width/6):bbox.position[0]+round(bbox.width/6)])
+            self.object_container[object_id].depth = average_depth
 
 
     def run(self):
@@ -73,10 +78,14 @@ class ObjectTracker:
 
             disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
 
+
+
+
+
             combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path, disparity)
 
-            cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
-            cv2.imshow("Frame with combined_frames", combined_frames)
+            # cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
+            # cv2.imshow("Frame with combined_frames", combined_frames)
 
             cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with matched objects", frame_with_matched_objects)
