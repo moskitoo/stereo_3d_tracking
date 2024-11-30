@@ -74,9 +74,9 @@ class TrackedObject:
         else:
             new_position = detected_object.position[-match_correct_frame_no:]
 
-        print(f"obj {self.id} new pos: {new_position}")
+        # print(f"obj {self.id} new pos: {new_position}")
 
-        print(f"obj {self.id}  pre pos: {self.position}")
+        # print(f"obj {self.id}  pre pos: {self.position}")
         
         if len(self.position) < match_correct_frame_no - 1:
             self.position = new_position
@@ -84,7 +84,7 @@ class TrackedObject:
             self.position = self.position[:-match_correct_frame_no]
             self.position += new_position
 
-        print(f"obj {self.id} post pos: {self.position}")
+        # print(f"obj {self.id} post pos: {self.position}")
 
         # self.position.append(detected_object.position[-1])
 
@@ -92,35 +92,35 @@ class TrackedObject:
         self.features = detected_object.features
         self.unmatched_counter = 0
 
-        print(f"pred pos kalman: {self.kalman_position}")
-        print(f"pred velocity kalman: {self.kalman_velocity}")
+        # print(f"pred pos kalman: {self.kalman_position}")
+        # print(f"pred velocity kalman: {self.kalman_velocity}")
 
         self.initialize_kalman(detected_object.position[-1], velocity=detected_object.kalman_velocity[-1])
         
-        print(f"post pos kalman: {self.kalman_position}")
-        print(f"post velocity kalman: {self.kalman_velocity}")
+        # print(f"post pos kalman: {self.kalman_position}")
+        # print(f"post velocity kalman: {self.kalman_velocity}")
     
     def predict_position_from_prev_state(self, prev_frame_no):
         velocity_array = np.array(self.kalman_velocity)
 
-        print(f"ID: {self.id}")
+        # print(f"ID: {self.id}")
         
-        print(f"velocities: {velocity_array}")
+        # print(f"velocities: {velocity_array}")
 
         # Check the length of the velocity array
         if len(velocity_array) < prev_frame_no:
             # Not enough frames for a meaningful calculation
             avg_kalman_vector = np.mean(velocity_array, axis=0)
-            print(f"velocities: {velocity_array}")
+            # print(f"velocities: {velocity_array}")
         elif len(velocity_array) < 2 * prev_frame_no:
             # Use the available frames before match_correct_frame_no
             avg_kalman_vector = np.mean(velocity_array[:prev_frame_no], axis=0)
-            print(f"velocities: {velocity_array[:prev_frame_no]}")
+            # print(f"velocities: {velocity_array[:prev_frame_no]}")
         else:
             # Use the specified range for averaging
             avg_kalman_vector = np.mean(velocity_array[-2 * prev_frame_no:-prev_frame_no], axis=0)
-            print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
-            print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
+            # print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
+            # print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
 
         # print(f"avg kalman vector: {avg_kalman_vector}")
         
@@ -513,7 +513,7 @@ def get_cost_matrix(
     # print(pd.DataFrame(cost_matrix_detailed[1]))
     # print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
     # print(pd.DataFrame(cost_matrix_detailed_not_scaled[1]))
-    print(pd.DataFrame(cost_matrix_basic[0]))
+    # print(pd.DataFrame(cost_matrix_basic[0]))
 
     cost_matrix_storage.append(
         {
@@ -645,7 +645,7 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
         if drift > drift_threshold:
             mismatched_instances.append(tracked_object)
 
-        print(f"drift {drift}")
+        # print(f"drift {drift}")
 
     if len(mismatched_instances) == 0:
         print("Didnt find any mismatches")
@@ -699,8 +699,8 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
                 object_buffer = object_container[match_id_1].clone()
                 # target_object = object_container[match_id_2]
 
-                print(f"obj1 {match_id_1} og positions: {object_container[match_id_1].position}")
-                print(f"obj2 {match_id_2} og positions: {object_container[match_id_2].position}")
+                # print(f"obj1 {match_id_1} og positions: {object_container[match_id_1].position}")
+                # print(f"obj2 {match_id_2} og positions: {object_container[match_id_2].position}")
                 
                 # Update states
                 object_container[match_id_1].update_state_rematch(object_container[match_id_2])
@@ -708,16 +708,15 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
                 # object_container[match_id_1].update_state(object_container[match_id_2])
                 # object_container[match_id_2].update_state(object_buffer)
 
-                print(f"obj1 {match_id_1} NEW positions: {object_container[match_id_1].position}")
-                print(f"obj2 {match_id_2} NEW positions: {object_container[match_id_2].position}")
+                # print(f"obj1 {match_id_1} NEW positions: {object_container[match_id_1].position}")
+                # print(f"obj2 {match_id_2} NEW positions: {object_container[match_id_2].position}")
                 
                 # Mark both IDs as processed
                 remached_instances.add(match_id_1)
                 remached_instances.add(match_id_2)
                 
-                # Optional: Debug prints
-                print(f"Rematched objects: {match_id_1} and {match_id_2}")
-                print(f"Cost: {cost}")
+                # print(f"Rematched objects: {match_id_1} and {match_id_2}")
+                # print(f"Cost: {cost}")
             
             except KeyError:
                 print(f"Warning: Invalid object IDs - {match_id_1}, {match_id_2}")
