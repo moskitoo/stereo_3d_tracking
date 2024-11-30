@@ -344,7 +344,7 @@ def get_cost_matrix(
             # IoU cost
             iou_cost = 1 - IOU(tracked_object.bbox, detected_object.bbox)
             if iou_cost >= iou_threshold:
-                iou_cost = 100
+                iou_cost = 2 * iou_cost
 
             # Feature cost
             feat_cost = (
