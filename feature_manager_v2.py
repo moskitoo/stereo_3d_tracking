@@ -47,17 +47,26 @@ class TrackedObject:
     def clone(self):
         return copy.deepcopy(self)
 
-    def update_state(self, detected_object):
-        self.position.append(detected_object.position[-1])
+    def update_state(self, detected_object=None):
+        if detected_object:
+            self.position.append(detected_object.position[-1])
 
-        self.bbox = detected_object.bbox
-        self.features = detected_object.features
-        self.unmatched_counter = 0
-        x = detected_object.position[-1][0]
-        y = detected_object.position[-1][1]
+            self.bbox = detected_object.bbox
+            self.features = detected_object.features
+            self.unmatched_counter = 0
 
-        kalman_position = np.array([[x], [y]])
-        update = self.kalman_tracker.update(kalman_position)
+        self.update_kalman_filter(detected_object)
+
+    def update_kalman_filter(self, detected_object=None):
+
+        if detected_object:
+            x = detected_object.position[-1][0]
+            y = detected_object.position[-1][1]
+            measurement = np.array([[x], [y]])
+        else:
+            measurement = None
+
+        update = self.kalman_tracker.update(measurement)
         self.kalman_position.append((int(update[0, 0]), int(update[3, 0])))
         self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
         self.kalman_pred_position.append(
@@ -530,7 +539,7 @@ def get_cost_matrix(
 
 
 def match_objects(
-    detected_objects, object_container, cost_threshold=1.5, unmatched_threshold=5
+    detected_objects, object_container, cost_threshold=1.5, unmatched_threshold=45
 ):
     global id_counter
     global current_frame_number
@@ -602,6 +611,7 @@ def match_objects(
         # Remove unmatched objects after several unsuccessful matches
         for unmatched_id in unmatched_tracked_set:
             object_container[unmatched_id].unmatched_counter += 1
+            object_container[unmatched_id].update_state()
 
         object_container = {
             id: tracked_object

@@ -21,6 +21,8 @@ class ObjectTracker:
         self.rematching_frame_no = 5
         self.drift_threshold = 100
         self.rematch_cost_threshold = 1000
+        self.image_width = 1223
+        self.image_height = 370
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -53,6 +55,12 @@ class ObjectTracker:
             frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded)
             masked_frame = get_masked_image(raw_image, detection_output)
             bbox_frame = draw_bounding_boxes(raw_image, detection_output)
+
+            self.object_container = {
+                id: obj for id, obj in self.object_container.items() 
+                if (0 < obj.kalman_pred_position[-1][0] < self.image_width and 
+                    0 < obj.kalman_pred_position[-1][1] < self.image_height)
+            }
             
             self.extend_tracked_position_to_3d(disparity)
 
@@ -107,7 +115,7 @@ class ObjectTracker:
                 break
 
 def main():
-    sequence_number = 2
+    sequence_number = 3
     tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 
