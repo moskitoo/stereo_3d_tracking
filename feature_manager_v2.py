@@ -574,6 +574,10 @@ def match_objects(
         for match in matches:
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
+        unmatched_detected_decoded = []
+        for unmathced_det_id in unmatched_detected:
+            unmatched_detected_decoded.append(column_ids[unmathced_det_id])
+
         matches_cost = []
         for row, col in zip(row_indices, col_indices):
             matches_cost.append(round(float(cost_matrix[row, col]), 2))
@@ -607,7 +611,7 @@ def match_objects(
 
         # State 4: Add non matched detected objects to tracking
         unmatched_detected_ids = []
-        for unmatched_detected_id in unmatched_detected:
+        for unmatched_detected_id in unmatched_detected_decoded:
             non_matched_object = detected_objects[unmatched_detected_id]
             # non_matched_object.id = id_counter
             new_tracked_object = TrackedObject(

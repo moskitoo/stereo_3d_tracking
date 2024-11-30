@@ -107,7 +107,7 @@ class ObjectTracker:
                 break
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 
