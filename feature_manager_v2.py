@@ -69,17 +69,24 @@ class TrackedObject:
 
     def update_state_rematch(self, detected_object):
 
-        # if len(detected_object.position) < match_correct_frame_no:
-        #     new_position = detected_object.position
-        # else:
-        #     new_position = detected_object.position[-match_correct_frame_no:]
+        if len(detected_object.position) < match_correct_frame_no:
+            new_position = detected_object.position
+        else:
+            new_position = detected_object.position[-match_correct_frame_no:]
+
+        print(f"obj {self.id} new pos: {new_position}")
+
+        print(f"obj {self.id}  pre pos: {self.position}")
         
-        # if len(self.position) < match_correct_frame_no - 1:
-        #     self.position = new_position
-        # else:
-        #     self.position = self.position[:-match_correct_frame_no - 1]
-        #     self.position + new_position
-        self.position.append(detected_object.position[-1])
+        if len(self.position) < match_correct_frame_no - 1:
+            self.position = new_position
+        else:
+            self.position = self.position[:-match_correct_frame_no]
+            self.position += new_position
+
+        print(f"obj {self.id} post pos: {self.position}")
+
+        # self.position.append(detected_object.position[-1])
 
         self.bbox = detected_object.bbox
         self.features = detected_object.features

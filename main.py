@@ -48,13 +48,6 @@ class ObjectTracker:
             if self.frame_number % self.rematching_freq == 0:
                 correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
 
-            try:
-                print(f"6 pos: {self.object_container[6].position}")
-                print(f"6 pos kalman: {self.object_container[6].kalman_position}")
-                print(f"6 velocity kalman: {self.object_container[6].kalman_velocity}")
-            except:
-                pass
-
             # Visualization
             # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
             frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded)
