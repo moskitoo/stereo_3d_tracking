@@ -17,7 +17,8 @@ class ObjectTracker:
         self.object_container = {}
         self.previous_frame = None
         self.frame_number = 0
-        self.match_correct_frame_no = 5
+        self.rematching_freq = 3
+        self.rematching_frame_no = 5
         self.drift_threshold = 100
         self.rematch_cost_threshold = 1000
 
@@ -41,11 +42,18 @@ class ObjectTracker:
             detected_objects = apply_nms(detected_objects, 0.5)
 
             # Track objects
-            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.match_correct_frame_no)
+            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.rematching_frame_no)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
 
-            if self.frame_number % self.match_correct_frame_no == 0:
-                correct_matches(self.object_container, self.match_correct_frame_no, self.drift_threshold, self.rematch_cost_threshold)
+            if self.frame_number % self.rematching_freq == 0:
+                correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
+
+            try:
+                print(f"6 pos: {self.object_container[6].position}")
+                print(f"6 pos kalman: {self.object_container[6].kalman_position}")
+                print(f"6 velocity kalman: {self.object_container[6].kalman_velocity}")
+            except:
+                pass
 
             # Visualization
             # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)

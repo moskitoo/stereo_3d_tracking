@@ -31,11 +31,14 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.initialize_kalman(position)
+
+    def initialize_kalman(self, position, velocity=(0,0)):
         self.kalman_tracker = KalmanTracker()
         self.kalman_tracker.X[0] = position[0]
         self.kalman_tracker.X[3] = position[1]
         self.kalman_position = [position]
-        self.kalman_velocity = [(0, 0)]
+        self.kalman_velocity = [velocity]
         self.kalman_pred_position = [position]
 
     def __getattribute__(self, name):
@@ -46,21 +49,6 @@ class TrackedObject:
 
     def update_state(self, detected_object):
         self.position.append(detected_object.position[-1])
-
-        # if len(self.position) > match_correct_frame_no and len(detected_object.position) > match_correct_frame_no:
-        #     # Keep the existing positions except for the last match_correct_frame_no positions
-        #     # Replace those with the last match_correct_frame_no positions from detected object
-        #     self.position = self.position[:-match_correct_frame_no] + detected_object.position[-match_correct_frame_no:]
-        
-        # # Case 2: Current object's list is too short
-        # elif len(self.position) <= match_correct_frame_no:
-        #     # Take positions from detected object's end to fill up to match_correct_frame_no
-        #     self.position = detected_object.position[-match_correct_frame_no:]
-        
-        # # Case 3: Detected object's list is too short
-        # else:  # len(self.position) > match_correct_frame_no and len(detected_object.position) <= match_correct_frame_no
-        #     # Keep the beginning of current object's positions and append detected object's positions
-        #     self.position = self.position[:-len(detected_object.position)] + detected_object.position
 
         self.bbox = detected_object.bbox
         self.features = detected_object.features
@@ -78,28 +66,54 @@ class TrackedObject:
                 self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
             ]
         )
+
+    def update_state_rematch(self, detected_object):
+
+        # if len(detected_object.position) < match_correct_frame_no:
+        #     new_position = detected_object.position
+        # else:
+        #     new_position = detected_object.position[-match_correct_frame_no:]
+        
+        # if len(self.position) < match_correct_frame_no - 1:
+        #     self.position = new_position
+        # else:
+        #     self.position = self.position[:-match_correct_frame_no - 1]
+        #     self.position + new_position
+        self.position.append(detected_object.position[-1])
+
+        self.bbox = detected_object.bbox
+        self.features = detected_object.features
+        self.unmatched_counter = 0
+
+        print(f"pred pos kalman: {self.kalman_position}")
+        print(f"pred velocity kalman: {self.kalman_velocity}")
+
+        self.initialize_kalman(detected_object.position[-1], velocity=detected_object.kalman_velocity[-1])
+        
+        print(f"post pos kalman: {self.kalman_position}")
+        print(f"post velocity kalman: {self.kalman_velocity}")
     
     def predict_position_from_prev_state(self, prev_frame_no):
         velocity_array = np.array(self.kalman_velocity)
 
         print(f"ID: {self.id}")
         
-        # print(f"velocities: {velocity_array}")
+        print(f"velocities: {velocity_array}")
 
         # Check the length of the velocity array
         if len(velocity_array) < prev_frame_no:
             # Not enough frames for a meaningful calculation
             avg_kalman_vector = np.mean(velocity_array, axis=0)
-            # print(f"velocities: {velocity_array}")
+            print(f"velocities: {velocity_array}")
         elif len(velocity_array) < 2 * prev_frame_no:
             # Use the available frames before match_correct_frame_no
             avg_kalman_vector = np.mean(velocity_array[:prev_frame_no], axis=0)
-            # print(f"velocities: {velocity_array[:prev_frame_no]}")
+            print(f"velocities: {velocity_array[:prev_frame_no]}")
         else:
             # Use the specified range for averaging
             avg_kalman_vector = np.mean(velocity_array[-2 * prev_frame_no:-prev_frame_no], axis=0)
-            # print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
-            # print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
+            print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
+            print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
 
         # print(f"avg kalman vector: {avg_kalman_vector}")
         
@@ -173,33 +187,25 @@ def visualize_objects(frame, tracked_objects, match_correct_frame_no):
             obj.kalman_position[-1][1] + dy * 1,
         )
 
-        if len(obj.position) >= 5:
-            cv2.arrowedLine(frame_copy, obj.position[-5],
+        if len(obj.kalman_position) >= 5:
+            cv2.arrowedLine(frame_copy, obj.kalman_position[-5],
                         extended_end, obj.color, 2)
             # take the oldest one when we dont have enough records
         else: 
-            cv2.arrowedLine(frame_copy, obj.position[0],
-                        extended_end, obj.color, 2)
-        # cv2.arrowedLine(frame_copy, obj.kalman_position,
-        #                 extended_end, obj.color, 2)
+            cv2.arrowedLine(frame_copy, obj.kalman_position[0],
+                        extended_end, obj.color, 2)             
 
-        estimated_position = obj.predict_position_from_prev_state(match_correct_frame_no)
-        est_x = int(estimated_position[0])
-        est_y = int(estimated_position[1])
-
-        cv2.circle(frame_copy, (est_x, est_y), 10, obj.color, -1)
+        cv2.circle(frame_copy, obj.kalman_pred_position[-1], 10, obj.color, -1)
         cv2.putText(
             frame_copy,
             str(obj.id),
-            (est_x - 5, est_y + 5),
+            (obj.kalman_pred_position[-1][0] - 5, obj.kalman_pred_position[-1][1] + 5),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.4,
             (255, 255, 255),
             1,
             cv2.LINE_AA,
         )
-
-        cv2.arrowedLine(frame_copy, (est_x, est_y), (x, y), obj.color, 2)
 
         cv2.circle(frame_copy, (x, y), 10, obj.color, -1)
         cv2.putText(
@@ -686,8 +692,10 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
                 print(f"obj2 {match_id_2} og positions: {object_container[match_id_2].position}")
                 
                 # Update states
-                object_container[match_id_1].update_state(object_container[match_id_2])
-                object_container[match_id_2].update_state(object_buffer)
+                object_container[match_id_1].update_state_rematch(object_container[match_id_2])
+                object_container[match_id_2].update_state_rematch(object_buffer)
+                # object_container[match_id_1].update_state(object_container[match_id_2])
+                # object_container[match_id_2].update_state(object_buffer)
 
                 print(f"obj1 {match_id_1} NEW positions: {object_container[match_id_1].position}")
                 print(f"obj2 {match_id_2} NEW positions: {object_container[match_id_2].position}")
