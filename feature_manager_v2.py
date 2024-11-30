@@ -8,6 +8,7 @@ from scipy.optimize import linear_sum_assignment
 import pandas as pd
 from datetime import datetime
 import torch
+import copy
 
 from kalman_filter import KalmanTracker
 
@@ -17,6 +18,8 @@ current_frame_number = 0
 
 cost_matrix_storage = []
 SAVE_DIR = "cost_matrices"
+
+match_correct_frame_no = 5
 
 
 class TrackedObject:
@@ -28,23 +31,30 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.initialize_kalman(position)
+
+    def initialize_kalman(self, position, velocity=(0,0)):
         self.kalman_tracker = KalmanTracker()
         self.kalman_tracker.X[0] = position[0]
         self.kalman_tracker.X[3] = position[1]
         self.kalman_position = [position]
-        self.kalman_velocity = [position]
+        self.kalman_velocity = [velocity]
         self.kalman_pred_position = [position]
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
+    
+    def clone(self):
+        return copy.deepcopy(self)
 
     def update_state(self, detected_object):
-        self.position.append(detected_object.position[0])
+        self.position.append(detected_object.position[-1])
+
         self.bbox = detected_object.bbox
         self.features = detected_object.features
         self.unmatched_counter = 0
-        x = detected_object.position[0][0]
-        y = detected_object.position[0][1]
+        x = detected_object.position[-1][0]
+        y = detected_object.position[-1][1]
 
         kalman_position = np.array([[x], [y]])
         update = self.kalman_tracker.update(kalman_position)
@@ -56,6 +66,74 @@ class TrackedObject:
                 self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
             ]
         )
+
+    def update_state_rematch(self, detected_object):
+
+        if len(detected_object.position) < match_correct_frame_no:
+            new_position = detected_object.position
+        else:
+            new_position = detected_object.position[-match_correct_frame_no:]
+
+        # print(f"obj {self.id} new pos: {new_position}")
+
+        # print(f"obj {self.id}  pre pos: {self.position}")
+        
+        if len(self.position) < match_correct_frame_no - 1:
+            self.position = new_position
+        else:
+            self.position = self.position[:-match_correct_frame_no]
+            self.position += new_position
+
+        # print(f"obj {self.id} post pos: {self.position}")
+
+        # self.position.append(detected_object.position[-1])
+
+        self.bbox = detected_object.bbox
+        self.features = detected_object.features
+        self.unmatched_counter = 0
+
+        # print(f"pred pos kalman: {self.kalman_position}")
+        # print(f"pred velocity kalman: {self.kalman_velocity}")
+
+        self.initialize_kalman(detected_object.position[-1], velocity=detected_object.kalman_velocity[-1])
+        
+        # print(f"post pos kalman: {self.kalman_position}")
+        # print(f"post velocity kalman: {self.kalman_velocity}")
+    
+    def predict_position_from_prev_state(self, prev_frame_no):
+        velocity_array = np.array(self.kalman_velocity)
+
+        # print(f"ID: {self.id}")
+        
+        # print(f"velocities: {velocity_array}")
+
+        # Check the length of the velocity array
+        if len(velocity_array) < prev_frame_no:
+            # Not enough frames for a meaningful calculation
+            avg_kalman_vector = np.mean(velocity_array, axis=0)
+            # print(f"velocities: {velocity_array}")
+        elif len(velocity_array) < 2 * prev_frame_no:
+            # Use the available frames before match_correct_frame_no
+            avg_kalman_vector = np.mean(velocity_array[:prev_frame_no], axis=0)
+            # print(f"velocities: {velocity_array[:prev_frame_no]}")
+        else:
+            # Use the specified range for averaging
+            avg_kalman_vector = np.mean(velocity_array[-2 * prev_frame_no:-prev_frame_no], axis=0)
+            # print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
+            # print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
+
+        # print(f"avg kalman vector: {avg_kalman_vector}")
+        
+        # Estimate position using average velocity
+        if len(self.position) < prev_frame_no:
+            estimated_position = self.position[0] + avg_kalman_vector * prev_frame_no
+        else:
+            estimated_position = self.position[-prev_frame_no] + avg_kalman_vector * prev_frame_no
+
+        drift = np.linalg.norm(estimated_position - self.position[-1])
+        print(f"Drift: {round(drift, 2)}, Estimated position: {estimated_position}, Actual position: {self.position[-1]}")
+
+        return estimated_position
 
 
 class BoundingBox:
@@ -91,7 +169,7 @@ class BoundingBox:
         return self.width / self.height
 
 
-def visualize_objects(frame, tracked_objects):
+def visualize_objects(frame, tracked_objects, match_correct_frame_no):
     frame_copy = frame.copy()
 
     counter = 0
@@ -100,11 +178,11 @@ def visualize_objects(frame, tracked_objects):
         x = obj.position[-1][0]
         y = obj.position[-1][1]
 
-        if obj.id < 5:
-            print(f"position (t): {obj.position}")
-            print(f"kalman position: {obj.kalman_position}")
-            print(f"kalman velocity: {obj.kalman_velocity}")
-            print(f"kalman position predicted: {obj.kalman_pred_position}")
+        # if obj.id < 5:
+        #     print(f"position (t): {obj.position}")
+        #     print(f"kalman position: {obj.kalman_position}")
+        #     print(f"kalman velocity: {obj.kalman_velocity}")
+        #     print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
         dx = obj.kalman_pred_position[-1][0] - obj.kalman_position[-1][0]
@@ -116,15 +194,25 @@ def visualize_objects(frame, tracked_objects):
             obj.kalman_position[-1][1] + dy * 1,
         )
 
-        if len(obj.position) >= 5:
-            cv2.arrowedLine(frame_copy, obj.position[-5],
+        if len(obj.kalman_position) >= 5:
+            cv2.arrowedLine(frame_copy, obj.kalman_position[-5],
                         extended_end, obj.color, 2)
             # take the oldest one when we dont have enough records
         else: 
-            cv2.arrowedLine(frame_copy, obj.position[0],
-                        extended_end, obj.color, 2)
-        # cv2.arrowedLine(frame_copy, obj.kalman_position,
-        #                 extended_end, obj.color, 2)
+            cv2.arrowedLine(frame_copy, obj.kalman_position[0],
+                        extended_end, obj.color, 2)             
+
+        cv2.circle(frame_copy, obj.kalman_pred_position[-1], 10, obj.color, -1)
+        cv2.putText(
+            frame_copy,
+            str(obj.id),
+            (obj.kalman_pred_position[-1][0] - 5, obj.kalman_pred_position[-1][1] + 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
 
         cv2.circle(frame_copy, (x, y), 10, obj.color, -1)
         cv2.putText(
@@ -425,7 +513,7 @@ def get_cost_matrix(
     # print(pd.DataFrame(cost_matrix_detailed[1]))
     # print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
     # print(pd.DataFrame(cost_matrix_detailed_not_scaled[1]))
-    print(pd.DataFrame(cost_matrix_basic[0]))
+    # print(pd.DataFrame(cost_matrix_basic[0]))
 
     cost_matrix_storage.append(
         {
@@ -468,8 +556,6 @@ def match_objects(
         )
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
-        print(cost_matrix)
-
         print(f"rows: {row_indices}")
         print(f"cols: {col_indices}")
 
@@ -487,6 +573,10 @@ def match_objects(
         matches_decoded = []
         for match in matches:
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
+
+        unmatched_detected_decoded = []
+        for unmathced_det_id in unmatched_detected:
+            unmatched_detected_decoded.append(column_ids[unmathced_det_id])
 
         matches_cost = []
         for row, col in zip(row_indices, col_indices):
@@ -521,7 +611,7 @@ def match_objects(
 
         # State 4: Add non matched detected objects to tracking
         unmatched_detected_ids = []
-        for unmatched_detected_id in unmatched_detected:
+        for unmatched_detected_id in unmatched_detected_decoded:
             non_matched_object = detected_objects[unmatched_detected_id]
             # non_matched_object.id = id_counter
             new_tracked_object = TrackedObject(
@@ -541,6 +631,97 @@ def match_objects(
         current_frame_number += 1
 
         return object_container, matches, matches_decoded
+
+def correct_matches(object_container, match_correct_frame_no, drift_threshold, cost_threshold):
+
+    mismatched_instances = []
+    for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
+        # Convert kalman_velocity to a numpy array for vectorized operations
+        
+        estimated_position = tracked_object.predict_position_from_prev_state(match_correct_frame_no)
+
+        drift = np.linalg.norm(estimated_position - tracked_object.position[-1])
+
+        if drift > drift_threshold:
+            mismatched_instances.append(tracked_object)
+
+        # print(f"drift {drift}")
+
+    if len(mismatched_instances) == 0:
+        print("Didnt find any mismatches")
+    
+    cost_matrix = np.zeros((len(mismatched_instances), len(mismatched_instances)))
+
+    for i, row_obj in enumerate(mismatched_instances):
+        for j, col_obj in enumerate(mismatched_instances):
+            if i == j:
+                cost_matrix[i, j] = np.inf
+            elif row_obj.type != col_obj.type:
+                cost_matrix[i, j] = cost_threshold
+            else:
+                cost_matrix[i, j] = np.linalg.norm(row_obj.position[-1] - col_obj.position[-1])
+
+    print("mismatches cost matrix")
+    print(cost_matrix)
+    
+    if len(mismatched_instances) <= 1:
+        return
+    
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    print(f"rows: {row_indices}")
+    print(f"cols: {col_indices}")
+
+    matches = []
+    matches_decoded = []
+    costs = []
+
+    for row, col in zip(row_indices, col_indices):
+        matches.append((row, col))
+        matches_decoded.append((mismatched_instances[row].id, mismatched_instances[col].id))
+        costs.append(cost_matrix[row, col])
+
+    print(f"matches: {matches}")
+    print(f"matches_decoded: {matches_decoded}")
+
+    remached_instances = set()  # Use a set for faster lookup
+    for cost, (match_id_1, match_id_2) in zip(costs, matches_decoded):
+        print(f"rematched: {remached_instances}")
+        
+        # Skip if either match ID is already processed or the cost is too high
+        if match_id_1 in remached_instances or match_id_2 in remached_instances or cost >= cost_threshold:
+            print(f"rematched discarded: {match_id_1},{match_id_2}")
+            continue
+        
+        # Ensure both match IDs are valid
+        if match_id_1 is not None and match_id_2 is not None:
+            try:
+                object_buffer = object_container[match_id_1].clone()
+                # target_object = object_container[match_id_2]
+
+                # print(f"obj1 {match_id_1} og positions: {object_container[match_id_1].position}")
+                # print(f"obj2 {match_id_2} og positions: {object_container[match_id_2].position}")
+                
+                # Update states
+                object_container[match_id_1].update_state_rematch(object_container[match_id_2])
+                object_container[match_id_2].update_state_rematch(object_buffer)
+                # object_container[match_id_1].update_state(object_container[match_id_2])
+                # object_container[match_id_2].update_state(object_buffer)
+
+                # print(f"obj1 {match_id_1} NEW positions: {object_container[match_id_1].position}")
+                # print(f"obj2 {match_id_2} NEW positions: {object_container[match_id_2].position}")
+                
+                # Mark both IDs as processed
+                remached_instances.add(match_id_1)
+                remached_instances.add(match_id_2)
+                
+                # print(f"Rematched objects: {match_id_1} and {match_id_2}")
+                # print(f"Cost: {cost}")
+            
+            except KeyError:
+                print(f"Warning: Invalid object IDs - {match_id_1}, {match_id_2}")
+            except Exception as e:
+                print(f"Error during rematching: {e}")
 
 
 def filter_false_matches(

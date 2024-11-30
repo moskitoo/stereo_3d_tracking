@@ -16,6 +16,11 @@ class ObjectTracker:
         self.depth_manager = DepthManager()
         self.object_container = {}
         self.previous_frame = None
+        self.frame_number = 0
+        self.rematching_freq = 3
+        self.rematching_frame_no = 5
+        self.drift_threshold = 100
+        self.rematch_cost_threshold = 1000
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -25,6 +30,7 @@ class ObjectTracker:
         self.disparity = disparity
 
         # Detect objects
+
         detection_outputs = self.object_detector.detect_objects(path)
 
         for detection_output in detection_outputs:
@@ -36,8 +42,11 @@ class ObjectTracker:
             detected_objects = apply_nms(detected_objects, 0.5)
 
             # Track objects
-            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container)
+            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.rematching_frame_no)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+
+            if self.frame_number % self.rematching_freq == 0:
+                correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
 
             # Visualization
             # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
@@ -91,12 +100,14 @@ class ObjectTracker:
 
             self.previous_frame = left_raw_img.copy()
 
+            self.frame_number += 1
+
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 
