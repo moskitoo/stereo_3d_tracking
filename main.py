@@ -19,6 +19,7 @@ class ObjectTracker:
         self.frame_number = 0
         self.match_correct_frame_no = 5
         self.drift_threshold = 100
+        self.rematch_cost_threshold = 1000
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -40,14 +41,11 @@ class ObjectTracker:
             detected_objects = apply_nms(detected_objects, 0.5)
 
             # Track objects
-            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container)
+            frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.match_correct_frame_no)
             self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
 
             if self.frame_number % self.match_correct_frame_no == 0:
-                correct_matches(self.object_container, self.match_correct_frame_no, self.drift_threshold)
-            
-            for i, (tracked_id, tracked_object) in enumerate(self.object_container.items()):
-                print(tracked_object.kalman_velocity)
+                correct_matches(self.object_container, self.match_correct_frame_no, self.drift_threshold, self.rematch_cost_threshold)
 
             # Visualization
             # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
