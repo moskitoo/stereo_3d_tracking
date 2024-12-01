@@ -14,7 +14,6 @@ class TrackedObject:
     def __init__(self, type, position, bbox, features, descriptors, color):
         self.type = type
         self.position = [position]
-        self.depth = 0
         self.position_qty = 0
         self.bbox = bbox
         self.features = features

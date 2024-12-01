@@ -8,6 +8,7 @@ from scipy.optimize import linear_sum_assignment
 import pandas as pd
 from datetime import datetime
 import torch
+from kalman_filter_3d import *
 
 
 id_counter = 0
@@ -26,6 +27,8 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.depth = 0
+        self.world_3d_position = np.array([0,0,0])
 
 
     def __getattribute__(self, name):
@@ -37,6 +40,12 @@ class TrackedObject:
         self.bbox = detected_object.bbox
         self.features = detected_object.features
         self.unmatched_counter = 0
+
+    def initialize_3d_kalman(self, world_3d_position, velocity=(0,0,0)):
+        self.kalman_tracker3d = KalmanTracker3D()
+        self.kalman_tracker3d.X[0] = world_3d_position[0]
+        self.kalman_tracker3d.X[3] = world_3d_position[1]
+        self.kalman_tracker3d.X[6] = world_3d_position[2]
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
@@ -366,8 +375,12 @@ def visualize_matched_objects(frame, tracked_objects, detected_objects, matches)
             split_frame, (x, y), 10, obj.color, -1
         )
         cv2.putText(split_frame, str(obj.id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(split_frame, classes[int(obj.type)], (int(obj.bbox.left), int(obj.bbox.top) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
-        cv2.putText(split_frame, "("+str(obj.bbox.position[1])+","+str(obj.bbox.position[0])+","+str(int(obj.depth))+")", (int(obj.bbox.left), int(obj.bbox.bottom) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+        # cv2.putText(split_frame, classes[int(obj.type)], (int(obj.bbox.left), int(obj.bbox.top) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+        # cv2.putText(split_frame, "("+str(obj.world_3d_position[0])+","+str(obj.world_3d_position[1])+","+str(int(obj.world_3d_position[2]))+")", (int(obj.bbox.left), int(obj.bbox.bottom) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color = (0,0,255), thickness= 1)
+        # cv2.putText(split_frame, "({x:.2f},{y:.2f},{z:.2f})".format(x = obj.world_3d_position[0],y= obj.world_3d_position[1],z = obj.world_3d_position[2]), (int(obj.bbox.left), int(obj.bbox.bottom) - 10),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.3, color=(0, 0, 255), thickness=1)
+        cv2.putText(split_frame, "({x:.1f},{y:.1f},{z:.1f})".format(x = obj.world_3d_position[0],y= obj.world_3d_position[1],z = obj.world_3d_position[2]), (x,y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color=(0, 0, 255), thickness=1)
 
 
     # Bottom frame - detected objects

@@ -12,6 +12,7 @@ from feature_manager_v2 import *
 
 from object_detection import *
 from depth_image_manager import *
+from kalman_filter_3d import *
 
 camera_projection_matrix_left = np.array([[7.070493e+02, 0.000000e+00, 6.040814e+02, 4.575831e+01],
                                           [0.000000e+00, 7.070493e+02, 1.805066e+02, -3.454157e-01],
@@ -41,6 +42,13 @@ T_right = np.array([-4.756270e-01, 5.296617e-03, -5.437198e-03])
 R_left_to_right = np.linalg.inv(R_left) @ R_right
 
 imageSize = np.array([1.392000e+03, 5.120000e+02], dtype=int)
+T_left_to_right = T_right - T_left
+R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(cameraMatrix1=camera_calibration_matrix_left,
+                                                  distCoeffs1=camera_distortion_coeff_left,
+                                                  cameraMatrix2=camera_calibration_matrix_right,
+                                                  distCoeffs2=camera_distortion_coeff_right,
+                                                  imageSize=imageSize, R=R_left_to_right, T=T_left_to_right,
+                                                  newImageSize=[1224, 370])
 
 class ObjectTracker:
     """Manages object tracking across video frames."""
@@ -94,21 +102,29 @@ class ObjectTracker:
         return raw_image
 
     def get_object_3d_location(self):
-        T_left_to_right = T_right - T_left
-
-        Depths = -camera_calibration_matrix_left[0, 0] * T_left_to_right[0]/ (self.disparity)
-
+        points = cv2.reprojectImageTo3D(disparity=self.disparity.astype("f")/16,Q=Q)
         for object in self.object_container.items():
             object_id = object[0]
             bbox = object[1].bbox
-            # average_depth = np.mean(Depths[bbox.position[1]-round(bbox.height/9):bbox.position[1]+round(bbox.height/9),
-            #                         bbox.position[0]-round(bbox.width/9):bbox.position[0]+round(bbox.width/9)])
-            average_depth = np.mean(
-                Depths[bbox.position[1] -2:bbox.position[1] + 2,
-                bbox.position[0] - 2 : bbox.position[0] + 2])
 
-            self.object_container[object_id].depth = average_depth*5.9
-            print(average_depth)
+            average_position = np.mean(
+                points[bbox.position[1] -2:bbox.position[1] + 2,
+                bbox.position[0] - 2 : bbox.position[0] + 2],axis = (0,1))
+            # self.object_container[object_id].world_3d_position = average_position
+
+            if not hasattr(self.object_container[object_id],'kalman_tracker3d'):
+                self.object_container[object_id].initialize_3d_kalman(average_position)
+                self.object_container[object_id].world_3d_position = average_position
+
+            else:
+               self.object_container[object_id].kalman_tracker3d.update(average_position)
+               self.object_container[object_id].world_3d_position = self.object_container[object_id].kalman_tracker3d.get_position()
+
+
+
+
+
+
 
 
     def run(self):
