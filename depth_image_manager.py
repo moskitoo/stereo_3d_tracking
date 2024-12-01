@@ -17,15 +17,15 @@ class DepthManager():
         #     speckleRange=32
         # )
         self.stereo = cv2.StereoSGBM_create(
-            minDisparity=2,
-            numDisparities=16 * 4,  # Must be divisible by 16
+            minDisparity=15,
+            numDisparities=16 * 10,  # Must be divisible by 16
             blockSize=7,
             P1=8 * 1 * 7 ** 2,  # 8 * number_of_channels * blockSize^2
             P2=32 * 1 * 7 ** 2,  # 32 * number_of_channels * blockSize^2
-            disp12MaxDiff=600,
+            disp12MaxDiff=2000,
             uniquenessRatio=12,
             speckleWindowSize=100,
-            speckleRange=32)
+            speckleRange=64)
 
     def get_disparity_map(self, left_image, right_image):
 

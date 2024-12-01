@@ -38,6 +38,10 @@ R_right = np.array([[9.995054e-01, 1.665288e-02, -2.667675e-02],
 T_left = np.array([5.989688e-02, -1.367835e-03, 4.637624e-03])
 T_right = np.array([-4.756270e-01, 5.296617e-03, -5.437198e-03])
 
+R_left_to_right = np.linalg.inv(R_left) @ R_right
+
+imageSize = np.array([1.392000e+03, 5.120000e+02], dtype=int)
+
 class ObjectTracker:
     """Manages object tracking across video frames."""
     def __init__(self, sequence_number: int = 3):
@@ -92,7 +96,7 @@ class ObjectTracker:
     def get_object_3d_location(self):
         T_left_to_right = T_right - T_left
 
-        Depths = -camera_calibration_matrix_left[0, 0] * T_left_to_right[0] * 2 / self.disparity
+        Depths = -camera_calibration_matrix_left[0, 0] * T_left_to_right[0]/ (self.disparity)
 
         for object in self.object_container.items():
             object_id = object[0]
@@ -103,41 +107,6 @@ class ObjectTracker:
                 Depths[bbox.position[1] -2:bbox.position[1] + 2,
                 bbox.position[0] - 2 : bbox.position[0] + 2])
 
-            R_left_to_right = np.linalg.inv(R_left)@R_right
-
-
-
-            imageSize = np.array([1.392000e+03, 5.120000e+02], dtype=int)
-
-            # R1,R2,P1,P2,Q,roi1,roi2 = cv2.stereoRectify(cameraMatrix1=camera_calibration_matrix_left, distCoeffs1=camera_distortion_coeff_left,
-            #                                         cameraMatrix2=camera_calibration_matrix_right,distCoeffs2=camera_distortion_coeff_right,
-            #                                         imageSize=imageSize,R=R_left_to_right,T=T_left_to_right,newImageSize=[1224,370])
-            # points = cv2.reprojectImageTo3D(disparity=self.disparity,Q=Q)
-            # def min_max_normalize_positive(data):
-            #     data = np.array(data)
-            #     # Mask positive values
-            #     positive_mask = data > 0
-            #     positive_values = data[positive_mask]
-            #
-            #     if len(positive_values) > 0:
-            #         # Perform Min-Max normalization on positive values
-            #         min_val = positive_values.min()
-            #         max_val = positive_values.max()
-            #
-            #         # Avoid division by zero
-            #         if max_val - min_val > 0:
-            #             normalized_values = (positive_values - min_val) / (max_val - min_val)
-            #         else:
-            #             normalized_values = positive_values  # All values are the same
-            #
-            #         # Replace normalized positive values back into the original array
-            #         data[positive_mask] = normalized_values
-            #         data[data < 0] = 1
-            #
-            #     return data
-
-            # dis = np.where(np.abs(self.disparity) <= 1, 1, self.disparity)
-                       # def equations(vars):
             self.object_container[object_id].depth = average_depth*5.9
             print(average_depth)
 
@@ -150,10 +119,6 @@ class ObjectTracker:
             right_raw_img = self.process_raw_image(right_raw_img)
 
             disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
-
-
-
-
 
             combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path, disparity)
 
