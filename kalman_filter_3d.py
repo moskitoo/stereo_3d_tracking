@@ -28,7 +28,7 @@ class KalmanTracker3D:
         self.R = np.eye(3)*1e2
         self.u = np.zeros((9, 1))
 
-    def update(self, measurement):
+    def update(self, measurement= None):
         # Predict
         self.X = self.F @ self.X + self.u
         self.P = self.F @ self.P @ self.F.T

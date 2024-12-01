@@ -115,11 +115,13 @@ class ObjectTracker:
             if not hasattr(self.object_container[object_id],'kalman_tracker3d'):
                 self.object_container[object_id].initialize_3d_kalman(average_position)
                 self.object_container[object_id].world_3d_position = average_position
-
-            else:
+            elif self.object_container[object_id].unmatched_counter == 0:
                self.object_container[object_id].kalman_tracker3d.update(average_position)
                self.object_container[object_id].world_3d_position = self.object_container[object_id].kalman_tracker3d.get_position()
-
+            else:
+                self.object_container[object_id].kalman_tracker3d.update()
+                self.object_container[object_id].world_3d_position = self.object_container[
+                    object_id].kalman_tracker3d.get_position()
 
 
 
