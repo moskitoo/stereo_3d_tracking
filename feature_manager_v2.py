@@ -8,6 +8,7 @@ from scipy.optimize import linear_sum_assignment
 import pandas as pd
 from datetime import datetime
 import torch
+from kalman_filter_3d import *
 import copy
 
 from kalman_filter import KalmanTracker
@@ -31,15 +32,19 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.depth = 0
+        self.world_3d_position = np.array([0,0,0])
         self.initialize_kalman(position)
 
-    def initialize_kalman(self, position, velocity=(0,0)):
-        self.kalman_tracker = KalmanTracker()
-        self.kalman_tracker.X[0] = position[0]
-        self.kalman_tracker.X[3] = position[1]
-        self.kalman_position = [position]
-        self.kalman_velocity = [velocity]
-        self.kalman_pred_position = [position]
+    def initialize_kalman(self, position, velocity=(0,0,0)):
+       self.kalman_tracker = KalmanTracker3D()
+       self.kalman_tracker.X[0] = position[0]
+       self.kalman_tracker.X[3] = position[1]
+       self.kalman_tracker.X[6] = position[2]
+       self.kalman_position = [position]
+       self.kalman_velocity = [velocity]
+       self.kalman_pred_position = [position]        
+
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
