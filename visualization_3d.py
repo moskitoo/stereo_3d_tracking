@@ -3,7 +3,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 class ObjectVisualizer:
-    def __init__(self, figsize=(10, 8)):
+    def __init__(self, figsize=(10, 8), xlim=(-60, 20), ylim=(-20, 20), zlim=(-10, 30)):
         """
         Initialize 3D visualization with Matplotlib
         """
@@ -14,6 +14,11 @@ class ObjectVisualizer:
         self.ax.set_xlabel('X')
         self.ax.set_ylabel('Y')
         self.ax.set_zlabel('Z')
+        
+        # Set fixed axis limits
+        self.ax.set_xlim(xlim)
+        self.ax.set_ylim(ylim)
+        self.ax.set_zlim(zlim)
         
         # Store object plot references
         self.object_plots = {}
@@ -33,13 +38,14 @@ class ObjectVisualizer:
         
         # Plot each object
         for obj_id, obj in tracked_objects.items():
-            positions = np.array(obj.position)
+            # positions = np.array(obj.position)
+            positions = np.array(obj.kalman_position)
             
             # Separate x, y, z coordinates
             x, y, z = positions[:, 0], positions[:, 1], positions[:, 2]
 
-            if obj.id == 1:
-                print(f"ID: {obj.id}, Estimated 3D position: {positions[-1]}")
+            # if obj.id == 1:
+            #     print(f"ID: {obj.id}, Estimated 3D position: {positions[-1]}")
 
             
             # Convert color to matplotlib format (normalized 0-1 RGB)
@@ -65,7 +71,7 @@ class ObjectVisualizer:
         self.ax.legend()
         
         # Automatically adjust plot limits
-        self.ax.autoscale()
+        # self.ax.autoscale()
 
     def render(self, tracked_objects):
         """

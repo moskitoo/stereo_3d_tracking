@@ -195,7 +195,8 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         kalman_pred_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])).astype(int)
         kalman_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])).astype(int)
 
-        # print(f"tracked ID: {obj.id}, position: {obj.frame_2d_position[-1]}, kalman_position: {obj.kalman_position}, kalman_position (image plane): {depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])}")
+        object_position = depth_manager.get_object_position_in_img_frame(obj.position[-1])
+        print(f"tracked ID: {obj.id}, 2D position: {obj.frame_2d_position[-1]}, 3D position: {object_position}, kalman_position: {obj.kalman_position[-1]}, kalman_position (image plane): {depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])}")
 
         # if obj.id < 5:
         #     print(f"position (t): {obj.position}")
@@ -208,10 +209,11 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         dy = kalman_pred_position[1] - kalman_position[1]
 
         # Multiply the difference by a scaling factor (e.g., 3)
-        extended_end = (
-            kalman_position[0] + dx * 1,
-            kalman_position[1] + dy * 1,
-        )
+        # extended_end = (
+        #     kalman_position[0] + dx * 1,
+        #     kalman_position[1] + dy * 1,
+        # )
+        extended_end = kalman_pred_position
 
         if len(obj.kalman_position) >= 5:
             start_pos = depth_manager.get_object_position_in_img_frame(obj.kalman_position[-5]).astype(int)
@@ -222,7 +224,10 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         else:
             start_pos = depth_manager.get_object_position_in_img_frame(obj.kalman_position[0]).astype(int)
             start_pos, clipped_end = clip_point_to_image_edge(start_pos, extended_end)
-            cv2.arrowedLine(frame_copy, start_pos, clipped_end, obj.color, 2)            
+            cv2.arrowedLine(frame_copy, start_pos, clipped_end, obj.color, 2)  
+
+        # print(f"ID: {obj.id}, kalman position: {kalman_position}, kalman_pred_pos: {kalman_pred_position}") 
+        # print(f"ID: {obj.id}, arrow start: {start_pos}, clipped_end: {clipped_end}")          
 
         if point_in_image(kalman_pred_position):
             cv2.circle(frame_copy, kalman_pred_position, 10, obj.color, -1)
