@@ -76,7 +76,7 @@ class ObjectTracker:
                 detected_objects = apply_nms(detected_objects, 0.5)
 
                 for detected_object in detected_objects.values():
-                    print(f"ID: {detected_object.id}, position: {detected_object.position}")
+                    print(f"ID: {detected_object.id}, world pos.: {detected_object.position}, image pos.: {detected_object.frame_2d_position}")
 
                 # Track objects
                 frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)

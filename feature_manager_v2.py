@@ -34,7 +34,7 @@ class TrackedObject:
         self.id = id
         self.unmatched_counter = 0
         self.depth = 0
-        self.world_3d_position = np.array([0,0,0])
+        self.frame_2d_position = [bbox.position]
         self.initialize_kalman(position)
 
     def initialize_kalman(self, position, velocity=(0,0,0)):
@@ -56,6 +56,7 @@ class TrackedObject:
     def update_state(self, detected_object=None):
         if detected_object:
             self.position.append(detected_object.position[-1])
+            self.frame_2d_position.append(detected_object.bbox.position)
 
             self.bbox = detected_object.bbox
             self.features = detected_object.features
@@ -190,8 +191,8 @@ def visualize_objects(frame, tracked_objects):
     counter = 0
     # Display features for each object in its unique color
     for obj in tracked_objects.values():
-        x = obj.position[-1][0]
-        y = obj.position[-1][1]
+        x = obj.frame_2d_position[-1][0]
+        y = obj.frame_2d_position[-1][1]
 
         # if obj.id < 5:
         #     print(f"position (t): {obj.position}")
