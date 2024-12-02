@@ -79,8 +79,8 @@ class ObjectTracker:
                     print(f"ID: {detected_object.id}, world pos.: {detected_object.position}, image pos.: {detected_object.frame_2d_position}")
 
                 # Track objects
-                frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
                 self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+                frame_with_tracked_objects = visualize_objects(raw_image, self.object_container, self.depth_manager)
 
                 if self.frame_number % self.rematching_freq == 0:
                     correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)

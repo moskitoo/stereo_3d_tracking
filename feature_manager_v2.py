@@ -185,14 +185,19 @@ class BoundingBox:
         return self.width / self.height
 
 
-def visualize_objects(frame, tracked_objects):
+def visualize_objects(frame, tracked_objects, depth_manager):
     frame_copy = frame.copy()
 
     counter = 0
     # Display features for each object in its unique color
     for obj in tracked_objects.values():
-        x = obj.frame_2d_position[-1][0]
-        y = obj.frame_2d_position[-1][1]
+        x = np.round(obj.frame_2d_position[-1][0])
+        y = np.round(obj.frame_2d_position[-1][1])
+
+        kalman_pred_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])).astype(int)
+        kalman_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])).astype(int)
+
+        print(f"tracked ID: {obj.id}, position: {obj.frame_2d_position[-1]}, kalman_position: {obj.kalman_position}, kalman_position (image plane): {depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])}")
 
         # if obj.id < 5:
         #     print(f"position (t): {obj.position}")
@@ -201,28 +206,28 @@ def visualize_objects(frame, tracked_objects):
         #     print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
-        dx = obj.kalman_pred_position[-1][0] - obj.kalman_position[-1][0]
-        dy = obj.kalman_pred_position[-1][1] - obj.kalman_position[-1][1]
+        dx = kalman_pred_position[0] - kalman_position[0]
+        dy = kalman_pred_position[1] - kalman_position[1]
 
         # Multiply the difference by a scaling factor (e.g., 3)
         extended_end = (
-            obj.kalman_position[-1][0] + dx * 1,
-            obj.kalman_position[-1][1] + dy * 1,
+            kalman_position[0] + dx * 1,
+            kalman_position[1] + dy * 1,
         )
 
         if len(obj.kalman_position) >= 5:
-            cv2.arrowedLine(frame_copy, obj.kalman_position[-5],
+            cv2.arrowedLine(frame_copy, depth_manager.get_object_position_in_img_frame(obj.kalman_position[-5]),
                         extended_end, obj.color, 2)
             # take the oldest one when we dont have enough records
         else: 
-            cv2.arrowedLine(frame_copy, obj.kalman_position[0],
+            cv2.arrowedLine(frame_copy, depth_manager.get_object_position_in_img_frame(obj.kalman_position[0]).astype(int),
                         extended_end, obj.color, 2)             
 
-        cv2.circle(frame_copy, obj.kalman_pred_position[-1], 10, obj.color, -1)
+        cv2.circle(frame_copy, kalman_pred_position, 10, obj.color, -1)
         cv2.putText(
             frame_copy,
             str(obj.id),
-            (obj.kalman_pred_position[-1][0] - 5, obj.kalman_pred_position[-1][1] + 5),
+            (kalman_pred_position[0] - 5, kalman_pred_position[1] + 5),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.4,
             (255, 255, 255),

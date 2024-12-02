@@ -40,17 +40,6 @@ R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(cameraMatrix1=camera_calibrati
 
 class DepthManager():
     def __init__(self):
-        # self.stereo = cv2.StereoSGBM_create(
-        #     minDisparity=1,
-        #     numDisparities=16 * 6,  # Must be divisible by 16
-        #     blockSize=7,
-        #     P1=8 * 1 * 7**2,  # 8 * number_of_channels * blockSize^2
-        #     P2=32 * 1 * 7**2,  # 32 * number_of_channels * blockSize^2
-        #     disp12MaxDiff=1,
-        #     uniquenessRatio=10,
-        #     speckleWindowSize=100,
-        #     speckleRange=32
-        # )
         self.stereo = cv2.StereoSGBM_create(
             minDisparity=15,
             numDisparities=16 * 10,  # Must be divisible by 16
@@ -85,7 +74,16 @@ class DepthManager():
             self.points[bbox.position[1] -2:bbox.position[1] + 2,
             bbox.position[0] - 2 : bbox.position[0] + 2],axis = (0,1))
         return average_position
+    
+    def get_object_position_in_img_frame(self, world_point):
+        
+        world_point_homogeneous = np.append(world_point, 1)
+    
+        image_point = P1 @ world_point_homogeneous
+        
+        image_point /= image_point[2]
 
+        return image_point[:2]
 
 
 
