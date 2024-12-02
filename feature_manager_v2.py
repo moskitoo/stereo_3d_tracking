@@ -144,7 +144,7 @@ class TrackedObject:
             estimated_position = self.position[-prev_frame_no] + avg_kalman_vector * prev_frame_no
 
         drift = np.linalg.norm(estimated_position - self.position[-1])
-        print(f"Drift: {round(drift, 2)}, Estimated position: {estimated_position}, Actual position: {self.position[-1]}")
+        print(f"ID: {self.id}, Drift: {round(drift, 2)}, Estimated position: {estimated_position}, Actual position: {self.position[-1]}")
 
         return estimated_position
 
@@ -194,7 +194,7 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         kalman_pred_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])).astype(int)
         kalman_position = np.round(depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])).astype(int)
 
-        print(f"tracked ID: {obj.id}, position: {obj.frame_2d_position[-1]}, kalman_position: {obj.kalman_position}, kalman_position (image plane): {depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])}")
+        # print(f"tracked ID: {obj.id}, position: {obj.frame_2d_position[-1]}, kalman_position: {obj.kalman_position}, kalman_position (image plane): {depth_manager.get_object_position_in_img_frame(obj.kalman_position[-1])}")
 
         # if obj.id < 5:
         #     print(f"position (t): {obj.position}")
@@ -213,24 +213,42 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         )
 
         if len(obj.kalman_position) >= 5:
-            cv2.arrowedLine(frame_copy, depth_manager.get_object_position_in_img_frame(obj.kalman_position[-5]),
-                        extended_end, obj.color, 2)
+            start_pos = depth_manager.get_object_position_in_img_frame(obj.kalman_position[-5]).astype(int)
+            # clipped_end = clip_point_to_image_edge(start_pos, extended_end)
+            start_pos = depth_manager.get_object_position_in_img_frame(obj.kalman_position[0]).astype(int)
+            start_pos, clipped_end = clip_point_to_image_edge(start_pos, extended_end)
+            cv2.arrowedLine(frame_copy, start_pos, clipped_end, obj.color, 2)
+            # cv2.arrowedLine(frame_copy, depth_manager.get_object_position_in_img_frame(obj.kalman_position[-5]),
+            #             extended_end, obj.color, 2)
             # take the oldest one when we dont have enough records
-        else: 
-            cv2.arrowedLine(frame_copy, depth_manager.get_object_position_in_img_frame(obj.kalman_position[0]).astype(int),
-                        extended_end, obj.color, 2)             
+        else:
 
-        cv2.circle(frame_copy, kalman_pred_position, 10, obj.color, -1)
-        cv2.putText(
-            frame_copy,
-            str(obj.id),
-            (kalman_pred_position[0] - 5, kalman_pred_position[1] + 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
+            # print(f"ID: {obj.id}")
+            # print(f"first arg: {test}")
+            # print(f"second arg: {test_2}")
+            # print(f"kalman pos: {kalman_position}")
+            # print(f"kalman pred pos: {kalman_pred_position}")
+            start_pos = depth_manager.get_object_position_in_img_frame(obj.kalman_position[0]).astype(int)
+            start_pos, clipped_end = clip_point_to_image_edge(start_pos, extended_end)
+            cv2.arrowedLine(frame_copy, start_pos, clipped_end, obj.color, 2)
+
+            # cv2.arrowedLine(frame_copy, start_pos,
+            #             extended_end, obj.color, 2)             
+
+        if point_in_image(kalman_pred_position):
+            cv2.circle(frame_copy, kalman_pred_position, 10, obj.color, -1)
+            cv2.putText(
+                frame_copy,
+                str(obj.id),
+                (kalman_pred_position[0] - 5, kalman_pred_position[1] + 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+        else:
+            print(f"Predicted point (ID: {obj.id}) out of the image bounds")
 
         cv2.circle(frame_copy, (x, y), 10, obj.color, -1)
         cv2.putText(
@@ -247,6 +265,48 @@ def visualize_objects(frame, tracked_objects, depth_manager):
         counter += 1
     print(counter)
     return frame_copy
+
+def point_in_image(kalman_pred_position, image_width=1223, image_height=370):
+    return 0 <= kalman_pred_position[0] < image_width and 0 <= kalman_pred_position[1] < image_height
+
+def clip_point_to_image_edge(start_pos, end_pos, image_width=1223, image_height=370):
+    def clip_single_point(point):
+        x = max(0, min(point[0], image_width - 1))
+        y = max(0, min(point[1], image_height - 1))
+        return [x, y]
+    
+    # Clip both start and end points
+    clipped_start = clip_single_point(start_pos)
+    clipped_end = clip_single_point(end_pos)
+    
+    return clipped_start, clipped_end
+
+# def clip_point_to_image_edge(start_pos, end_pos, image_width=1223, image_height=370):
+#     dx = end_pos[0] - start_pos[0]
+#     dy = end_pos[1] - start_pos[1]
+    
+#     if end_pos[0] < 0:
+#         # Intersect with left boundary
+#         t = -start_pos[0] / dx
+#         clipped_y = int(start_pos[1] + t * dy)
+#         return [0, clipped_y]
+#     elif end_pos[0] >= image_width:
+#         # Intersect with right boundary
+#         t = (image_width - 1 - start_pos[0]) / dx
+#         clipped_y = int(start_pos[1] + t * dy)
+#         return [image_width - 1, clipped_y]
+#     elif end_pos[1] < 0:
+#         # Intersect with top boundary
+#         t = -start_pos[1] / dy
+#         clipped_x = int(start_pos[0] + t * dx)
+#         return [clipped_x, 0]
+#     elif end_pos[1] >= image_height:
+#         # Intersect with bottom boundary
+#         t = (image_height - 1 - start_pos[1]) / dy
+#         clipped_x = int(start_pos[0] + t * dx)
+#         return [clipped_x, image_height - 1]
+
+#     return end_pos
 
 
 def get_rand_color():
@@ -393,7 +453,7 @@ def get_cost_matrix(
         max_bbox_area_cost = 0
         max_kalman_euc_cost = 0
 
-        print(f"Tracked ID: {tracked_object.id}, world pos.: {tracked_object.position}, image pos.: {tracked_object.frame_2d_position}")
+        # print(f"Tracked ID: {tracked_object.id}, world pos.: {tracked_object.position}, image pos.: {tracked_object.frame_2d_position}")
 
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
             # Position cost

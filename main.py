@@ -75,8 +75,8 @@ class ObjectTracker:
                 detected_objects = detect_objects_yolo(raw_image, detection_output, self.depth_manager)
                 detected_objects = apply_nms(detected_objects, 0.5)
 
-                for detected_object in detected_objects.values():
-                    print(f"ID: {detected_object.id}, world pos.: {detected_object.position}, image pos.: {detected_object.frame_2d_position}")
+                # for detected_object in detected_objects.values():
+                #     print(f"ID: {detected_object.id}, world pos.: {detected_object.position}, image pos.: {detected_object.frame_2d_position}")
 
                 # Track objects
                 self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
@@ -112,9 +112,7 @@ class ObjectTracker:
         raw_image = (raw_image * 255).astype(np.uint8)
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
-
-
-
+    
             # if not hasattr(self.object_container[object_id],'kalman_tracker3d'):
             #     self.object_container[object_id].initialize_3d_kalman(average_position)
             #     self.object_container[object_id].world_3d_position = average_position
@@ -125,12 +123,6 @@ class ObjectTracker:
             #     self.object_container[object_id].kalman_tracker3d.update()
             #     self.object_container[object_id].world_3d_position = self.object_container[
             #         object_id].kalman_tracker3d.get_position()
-
-
-
-
-
-
 
     def run(self):
         """Run object tracking on all frames."""
@@ -174,17 +166,9 @@ class ObjectTracker:
                 break
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
 if __name__ == '__main__':
     main()
-
-
-# self.save_detections = save_detections
-# self.load_detections = load_detections
-# self.detections_dir = detections_dir
-# self.save_tracking = save_tracking
-# self.tracking_dir = tracking_dir
-# self.enable_tracking = enable_tracking
