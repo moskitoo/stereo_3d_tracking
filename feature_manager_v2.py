@@ -184,7 +184,7 @@ class BoundingBox:
         return self.width / self.height
 
 
-def visualize_objects(frame, tracked_objects, match_correct_frame_no):
+def visualize_objects(frame, tracked_objects):
     frame_copy = frame.copy()
 
     counter = 0
@@ -267,30 +267,30 @@ def get_detection_results(frame_number, seq_num):
     return bboxes, obj_types
 
 
-def detect_objects(frame, detection_output):
-    sift = cv2.SIFT_create()
-    detected_objects = []
-    for id, [bbox, obj_type] in enumerate(
-        zip(detection_output[0], detection_output[1])
-    ):
-        bbox_obj = BoundingBox(*bbox)
+# def detect_objects(frame, detection_output):
+#     sift = cv2.SIFT_create()
+#     detected_objects = []
+#     for id, [bbox, obj_type] in enumerate(
+#         zip(detection_output[0], detection_output[1])
+#     ):
+#         bbox_obj = BoundingBox(*bbox)
 
-        cropped_frame = bbox_obj.get_bbox_img(frame)
-        frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
-        kp, des = sift.detectAndCompute(frame_gray, None)
+#         cropped_frame = bbox_obj.get_bbox_img(frame)
+#         frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
+#         kp, des = sift.detectAndCompute(frame_gray, None)
 
-        if des is None:
-            features = np.zeros(128)
-        else:
-            features = np.mean(des, axis=0)
+#         if des is None:
+#             features = np.zeros(128)
+#         else:
+#             features = np.mean(des, axis=0)
 
-        detected_objects.append(
-            TrackedObject(
-                obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id
-            )
-        )
+#         detected_objects.append(
+#             TrackedObject(
+#                 obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id
+#             )
+#         )
 
-    return detected_objects
+#     return detected_objects
 
 
 def detect_objects_yolo(frame, detection_output, depth_manager):
@@ -842,11 +842,11 @@ def visualize_matched_objects(
     # Top frame - tracked objects
     for obj in tracked_objects.values():
         if len(obj.position) > 1:
-            x = obj.position[-2][0]
-            y = obj.position[-2][1]
+            x = round(obj.position[-2][0])
+            y = round(obj.position[-2][1])
         else:
-            x = obj.position[-1][0]
-            y = obj.position[-1][1]
+            x = round(obj.position[-1][0])
+            y = round(obj.position[-1][1])
         cv2.circle(split_frame, (x, y), 10, obj.color, -1)
         cv2.putText(
             split_frame,
@@ -861,9 +861,9 @@ def visualize_matched_objects(
 
     # Bottom frame - detected objects
     for obj in detected_objects.values():
-        x = obj.position[0][0]
+        x = round(obj.position[0][0])
         # Offset y to place in bottom half
-        y = obj.position[0][1] + frame.shape[0]
+        y = round(obj.position[0][1]) + frame.shape[0]
         cv2.circle(split_frame, (x, y), 10, obj.color, -1)
         cv2.putText(
             split_frame,
@@ -882,13 +882,13 @@ def visualize_matched_objects(
         detected_obj = detected_objects[detected_idx]
 
         if len(tracked_obj.position) > 1:
-            start_point = tracked_obj.position[-2]
+            start_point = round(tracked_obj.position[-2])
         else:
-            start_point = tracked_obj.position[-1]
+            start_point = round(tracked_obj.position[-1])
         adjusted_start_point = (start_point[0], start_point[1] + 10)
         end_point = (
-            detected_obj.position[0][0],
-            detected_obj.position[0][1] + frame.shape[0] - 10,
+            round(detected_obj.position[0][0]),
+            round(detected_obj.position[0][1]) + frame.shape[0] - 10,
         )
 
         cv2.line(split_frame, adjusted_start_point, end_point, (0, 255, 0), 2)

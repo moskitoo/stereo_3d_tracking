@@ -75,13 +75,8 @@ class ObjectTracker:
                 detected_objects = detect_objects_yolo(raw_image, detection_output, self.depth_manager)
                 detected_objects = apply_nms(detected_objects, 0.5)
 
-                for obj in detected_objects.values():
-                    print(f"ID: {obj.id}, position 2D: {obj.position}")
-
-                self.update_detected_objects_3d_location()
-
-                for obj in detected_objects.values():
-                    print(f"ID: {obj.id}, position 3D: {obj.position}")
+                for detected_object in detected_objects.values():
+                    print(f"ID: {detected_object.id}, position: {detected_object.position}")
 
                 # Track objects
                 frame_with_tracked_objects = visualize_objects(raw_image, self.object_container)
@@ -168,13 +163,13 @@ class ObjectTracker:
                 cv2.imshow("Frame with matched objects", frame_with_matched_objects)
 
             cv2.namedWindow('Disparity Map', cv2.WINDOW_NORMAL)
-            cv2.imshow('Disparity Map', cv2.normalize(self.disparity, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U))
+            cv2.imshow('Disparity Map', cv2.normalize(self.depth_manager.disparity, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U))
 
             self.previous_frame = left_raw_img.copy()
 
             self.frame_number += 1
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
