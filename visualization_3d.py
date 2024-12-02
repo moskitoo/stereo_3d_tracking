@@ -14,11 +14,11 @@ class ObjectVisualizer:
         self.ax_3d = self.fig.add_subplot(221, projection='3d')
         self.ax_3d.set_title('3D Object Tracking')
         self.ax_3d.set_xlabel('X')
-        self.ax_3d.set_ylabel('Y')
-        self.ax_3d.set_zlabel('Z')
+        self.ax_3d.set_ylabel('Z')
+        self.ax_3d.set_zlabel('Y')
         self.ax_3d.set_xlim(xlim)
-        self.ax_3d.set_ylim(ylim)
-        self.ax_3d.set_zlim(zlim)
+        self.ax_3d.set_ylim(zlim)
+        self.ax_3d.set_zlim(ylim)
         
         # XY projection
         self.ax_xy = self.fig.add_subplot(222)
@@ -85,12 +85,12 @@ class ObjectVisualizer:
             
             # 3D plot
             self.object_plots_3d[obj_id] = self.ax_3d.scatter(
-                x, y, z, color=color, s=200, marker='o'  # Increased marker size
+                x, z, y, color=color, s=200, marker='o'  # Increased marker size
             )
             self.annotations['3d'][obj_id] = self.ax_3d.text(
-                x, y, z, f'{obj_id}', color='white', ha='center', va='center', fontsize=8
+                x, z, y, f'{obj_id}', color='white', ha='center', va='center', fontsize=8
             )
-            self.object_trajectories_3d[obj_id] = self.ax_3d.plot3D(x, y, z, color=color, linewidth=2, alpha=0.5)
+            self.object_trajectories_3d[obj_id] = self.ax_3d.plot3D(x, z, y, color=color, linewidth=2, alpha=0.5)
             
             # 2D projections
             self.object_projections['xy'][obj_id] = [
