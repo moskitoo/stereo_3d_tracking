@@ -12,6 +12,7 @@ from kalman_filter_3d import *
 import copy
 
 from kalman_filter import KalmanTracker
+from depth_image_manager import DepthManager
 
 
 id_counter = 0
@@ -292,7 +293,7 @@ def detect_objects(frame, detection_output):
     return detected_objects
 
 
-def detect_objects_yolo(frame, detection_output):
+def detect_objects_yolo(frame, detection_output, depth_manager):
     sift = cv2.SIFT_create()
     detected_objects = {}
     print(type(detection_output))
@@ -310,9 +311,11 @@ def detect_objects_yolo(frame, detection_output):
             features = np.zeros(128)
         else:
             features = np.mean(des, axis=0)
+        
+        position_3d = depth_manager.get_object_3d_location(bbox_obj)
 
         detected_objects[id] = TrackedObject(
-            obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id
+            obj_type, position_3d, bbox_obj, features, get_rand_color(), id
         )
 
     return detected_objects

@@ -29,6 +29,13 @@ T_right = np.array([-4.756270e-01, 5.296617e-03, -5.437198e-03])
 R_left_to_right = np.linalg.inv(R_left) @ R_right
 
 imageSize = np.array([1.392000e+03, 5.120000e+02], dtype=int)
+T_left_to_right = T_right - T_left
+R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(cameraMatrix1=camera_calibration_matrix_left,
+                                                  distCoeffs1=camera_distortion_coeff_left,
+                                                  cameraMatrix2=camera_calibration_matrix_right,
+                                                  distCoeffs2=camera_distortion_coeff_right,
+                                                  imageSize=imageSize, R=R_left_to_right, T=T_left_to_right,
+                                                  newImageSize=[1224, 370])
 
 
 class DepthManager():
@@ -55,7 +62,7 @@ class DepthManager():
             speckleWindowSize=100,
             speckleRange=64)
 
-    def get_disparity_map(self, left_image, right_image):
+    def update_disparity_map(self, left_image, right_image):
 
         left_image = cv2.cvtColor(left_image, cv2.COLOR_RGB2GRAY)
         right_image = cv2.cvtColor(right_image, cv2.COLOR_RGB2GRAY)
@@ -65,42 +72,19 @@ class DepthManager():
             raise FileNotFoundError("Stereo images not found!")        
 
         # Compute the disparity map
-        disparity = self.stereo.compute(left_image, right_image)
+        self.disparity = self.stereo.compute(left_image, right_image)
+        self.points = cv2.reprojectImageTo3D(disparity=self.disparity.astype("f")/16,Q=Q)
 
         # Normalize the disparity map for visualization
         # disparity_normalized = cv2.normalize(disparity, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
-        return disparity
+        # return disparity
 
-def get_object_3d_location(self):
-    T_left_to_right = T_right - T_left
-
-    Depths = -camera_calibration_matrix_left[0, 0] * T_left_to_right[0]/ (self.disparity)
-
-    R1,R2,P1,P2,Q,roi1,roi2 = cv2.stereoRectify(cameraMatrix1=camera_calibration_matrix_left, distCoeffs1=camera_distortion_coeff_left,
-                                            cameraMatrix2=camera_calibration_matrix_right,distCoeffs2=camera_distortion_coeff_right,
-                                            imageSize=imageSize,R=R_left_to_right,T=T_left_to_right,newImageSize=[1224,370])
-    points = cv2.reprojectImageTo3D(disparity=self.disparity.astype("f")/16,Q=Q)
-
-    for object in self.object_container.items():
-        object_id = object[0]
-        bbox = object[1].bbox
-        # average_depth = np.mean(Depths[bbox.position[1]-round(bbox.height/9):bbox.position[1]+round(bbox.height/9),
-        #                         bbox.position[0]-round(bbox.width/9):bbox.position[0]+round(bbox.width/9)])
-        # average_depth = np.mean(
-        #     Depths[bbox.position[1] -2:bbox.position[1] + 2,
-        #     bbox.position[0] - 2 : bbox.position[0] + 2])
-
+    def get_object_3d_location(self, bbox):
         average_position = np.mean(
-            points[bbox.position[1] -2:bbox.position[1] + 2,
+            self.points[bbox.position[1] -2:bbox.position[1] + 2,
             bbox.position[0] - 2 : bbox.position[0] + 2],axis = (0,1))
-        # self.object_container[object_id].depth = average_depth*5.9
-        self.object_container[object_id].world_3d_position = average_position
-        # print(average_depth)
-        # print(average_position)
-
-    # def update_kalman_filter(self, detected_object=None):
-
+        return average_position
 
 
 
