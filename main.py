@@ -14,6 +14,8 @@ from object_detection import *
 from depth_image_manager import *
 from kalman_filter_3d import *
 
+from visualization_3d import ObjectVisualizer
+
 camera_projection_matrix_left = np.array([[7.070493e+02, 0.000000e+00, 6.040814e+02, 4.575831e+01],
                                           [0.000000e+00, 7.070493e+02, 1.805066e+02, -3.454157e-01],
                                           [0.000000e+00, 0.000000e+00, 1.000000e+00, 4.981016e-03]])
@@ -56,6 +58,7 @@ class ObjectTracker:
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
         self.object_container = {}
+        self.visualizer = ObjectVisualizer()
 
     def process_frame(self, image, raw_image, path, disparity) -> None:
         """Process a single frame for object detection and tracking."""
@@ -84,6 +87,7 @@ class ObjectTracker:
             masked_frame = get_masked_image(raw_image, detection_output)
             bbox_frame = draw_bounding_boxes(raw_image, detection_output)
             
+            self.visualizer.render(self.object_container)
 
             combined_frames = combine_frames([
                 frame_with_tracked_objects, 
@@ -152,6 +156,8 @@ class ObjectTracker:
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
+
+        self.visualizer.close()
 
 def main():
     sequence_number = 1
