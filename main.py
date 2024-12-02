@@ -87,14 +87,14 @@ class ObjectTracker:
 
                 # Visualization
                 # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
-                frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded)
+                frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded, self.depth_manager)
                 masked_frame = get_masked_image(raw_image, detection_output)
                 bbox_frame = draw_bounding_boxes(raw_image, detection_output)
 
                 self.object_container = {
                     id: obj for id, obj in self.object_container.items() 
-                    if (0 < obj.kalman_pred_position[-1][0] < self.image_width and 
-                        0 < obj.kalman_pred_position[-1][1] < self.image_height)
+                    if (0 < self.depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])[0] < self.image_width and 
+                        0 < self.depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])[1] < self.image_height)
                 }
 
                 combined_frames = combine_frames([

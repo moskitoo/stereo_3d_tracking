@@ -37,12 +37,19 @@ class KalmanTracker3D:
             # Update
             S = self.H @ self.P @ self.H.T + self.R
             K = self.P @ self.H.T @ np.linalg.inv(S)
-            Y = np.expand_dims(measurement,-1) - self.H @ self.X
+            # Y = np.expand_dims(measurement,-1) - self.H @ self.X
+            Y = measurement - self.H @ self.X
             self.X = self.X + K @ Y
             self.P = (np.eye(9) - K @ self.H) @ self.P
+        
+        return self.X
     
     def get_position(self):
-        return (self.X[0, 0], self.X[3, 0], self.X[6, 0])
+        return np.array([self.X[0, 0], self.X[3, 0], self.X[6, 0]]).astype(int)
     
-
+    def get_velocity(self):
+        return np.array([self.X[1, 0], self.X[4, 0], self.X[7, 0]]).astype(int)
+    
+    def predict_next_position(self):
+        return self.get_position() + self.get_velocity()
     

@@ -69,19 +69,16 @@ class TrackedObject:
         if detected_object:
             x = detected_object.position[-1][0]
             y = detected_object.position[-1][1]
-            measurement = np.array([[x], [y]])
+            z = detected_object.position[-1][2]
+            measurement = np.array([[x], [y], [z]])
         else:
             measurement = None
 
-        update = self.kalman_tracker.update(measurement)
-        self.kalman_position.append((int(update[0, 0]), int(update[3, 0])))
-        self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-        self.kalman_pred_position.append(
-            [
-                self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-                self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
-            ]
-        )
+        self.kalman_tracker.update(measurement)
+
+        self.kalman_position.append(self.kalman_tracker.get_position())
+        self.kalman_velocity.append(self.kalman_tracker.get_velocity())
+        self.kalman_pred_position.append(self.kalman_tracker.predict_next_position())
 
     def update_state_rematch(self, detected_object):
 
@@ -395,6 +392,8 @@ def get_cost_matrix(
         max_pos_cost = 0
         max_bbox_area_cost = 0
         max_kalman_euc_cost = 0
+
+        print(f"Tracked ID: {tracked_object.id}, world pos.: {tracked_object.position}, image pos.: {tracked_object.frame_2d_position}")
 
         for j, (detected_id, detected_object) in enumerate(detected_objects.items()):
             # Position cost
@@ -835,7 +834,7 @@ def combine_frames(frames):
 
 
 def visualize_matched_objects(
-    prev_frame, frame, tracked_objects, detected_objects, matches
+    prev_frame, frame, tracked_objects, detected_objects, matches, depth_manager
 ):
     # Create a frame twice the height of the original
     split_frame = np.zeros(
@@ -848,11 +847,13 @@ def visualize_matched_objects(
     # Top frame - tracked objects
     for obj in tracked_objects.values():
         if len(obj.position) > 1:
-            x = round(obj.position[-2][0])
-            y = round(obj.position[-2][1])
+            position = np.round(depth_manager.get_object_position_in_img_frame(obj.position[-2])).astype(int)
+            x = position[0]
+            y = position[1]
         else:
-            x = round(obj.position[-1][0])
-            y = round(obj.position[-1][1])
+            position = np.round(depth_manager.get_object_position_in_img_frame(obj.position[-1])).astype(int)
+            x = position[0]
+            y = position[1]
         cv2.circle(split_frame, (x, y), 10, obj.color, -1)
         cv2.putText(
             split_frame,
@@ -867,9 +868,10 @@ def visualize_matched_objects(
 
     # Bottom frame - detected objects
     for obj in detected_objects.values():
-        x = round(obj.position[0][0])
+        position = np.round(depth_manager.get_object_position_in_img_frame(obj.position[-1])).astype(int)
+        x = position[0]
         # Offset y to place in bottom half
-        y = round(obj.position[0][1]) + frame.shape[0]
+        y = position[1] + frame.shape[0]
         cv2.circle(split_frame, (x, y), 10, obj.color, -1)
         cv2.putText(
             split_frame,
@@ -888,13 +890,13 @@ def visualize_matched_objects(
         detected_obj = detected_objects[detected_idx]
 
         if len(tracked_obj.position) > 1:
-            start_point = round(tracked_obj.position[-2])
+            start_point = np.round(depth_manager.get_object_position_in_img_frame(tracked_obj.position[-2])).astype(int)
         else:
-            start_point = round(tracked_obj.position[-1])
+            start_point = np.round(depth_manager.get_object_position_in_img_frame(tracked_obj.position[-1])).astype(int)
         adjusted_start_point = (start_point[0], start_point[1] + 10)
         end_point = (
-            round(detected_obj.position[0][0]),
-            round(detected_obj.position[0][1]) + frame.shape[0] - 10,
+            np.round(depth_manager.get_object_position_in_img_frame(detected_obj.position[0])).astype(int)[0],
+            np.round(depth_manager.get_object_position_in_img_frame(detected_obj.position[0])).astype(int)[1] + frame.shape[0] - 10,
         )
 
         cv2.line(split_frame, adjusted_start_point, end_point, (0, 255, 0), 2)
