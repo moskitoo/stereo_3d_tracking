@@ -15,6 +15,8 @@ from object_detection import *
 from depth_image_manager import *
 from kalman_filter_3d import *
 
+from visualization_3d import ObjectVisualizer
+
 
 class ObjectTracker:
     """Manages object tracking across video frames."""
@@ -29,6 +31,7 @@ class ObjectTracker:
         self.sequence_number = sequence_number
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
+        self.visualizer = ObjectVisualizer()
         self.object_container = {}
         self.previous_frame = None
         self.frame_number = 0
@@ -81,6 +84,7 @@ class ObjectTracker:
                 # Track objects
                 self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
                 frame_with_tracked_objects = visualize_objects(raw_image, self.object_container, self.depth_manager)
+                frame_with_tracked_objects = visualize_objects_3d(raw_image, self.object_container, self.depth_manager)
 
                 if self.frame_number % self.rematching_freq == 0:
                     correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
@@ -96,6 +100,8 @@ class ObjectTracker:
                     if (0 < self.depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])[0] < self.image_width and 
                         0 < self.depth_manager.get_object_position_in_img_frame(obj.kalman_pred_position[-1])[1] < self.image_height)
                 }
+
+                self.visualizer.render(self.object_container)
 
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
@@ -164,9 +170,11 @@ class ObjectTracker:
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
+        
+        self.visualizer.close()
 
 def main():
-    sequence_number = 2
+    sequence_number = 1
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
