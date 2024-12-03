@@ -144,8 +144,8 @@ class ObjectTracker:
 
             combined_frames, frame_with_matched_objects = self.process_frame(left_image, left_raw_img, left_img_path, disparity)
 
-            # cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
-            # cv2.imshow("Frame with combined_frames", combined_frames)
+            cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
+            cv2.imshow("Frame with combined_frames", combined_frames)
 
             cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
             cv2.imshow("Frame with matched objects", frame_with_matched_objects)
@@ -160,7 +160,7 @@ class ObjectTracker:
         self.visualizer.close()
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number)
     tracker.run()
 
