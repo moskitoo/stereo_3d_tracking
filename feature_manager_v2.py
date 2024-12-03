@@ -49,14 +49,19 @@ class TrackedObject:
         return copy.deepcopy(self)
 
     def update_state(self, depth_manager, detected_object=None):
+        self.update_kalman_filter(detected_object=detected_object, depth_manager=depth_manager)
+        
         if detected_object:
             self.position.append(detected_object.position[-1])
 
             self.bbox = detected_object.bbox
             self.features = detected_object.features
             self.unmatched_counter = 0
+        else:
+            self.position.append(self.kalman_position[-1])
+            self.bbox.translate(self.kalman_position[-1])
 
-        self.update_kalman_filter(detected_object=detected_object, depth_manager=depth_manager)
+
 
     def update_kalman_filter(self, depth_manager, detected_object=None):
 
@@ -190,6 +195,12 @@ class BoundingBox:
 
     def get_bbox_aspect_ratio(self):
         return self.width / self.height
+    
+    def translate(self, new_center):
+        self.left = new_center[0] - int(self.width/2)
+        self.top = new_center[1] - int(self.height/2)
+        self.right = new_center[0] + int(self.width/2)
+        self.bottom = new_center[1] + int(self.height/2)
 
 
 def visualize_objects(frame, tracked_objects, match_correct_frame_no):
