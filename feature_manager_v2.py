@@ -32,6 +32,7 @@ class TrackedObject:
         self.color = color
         self.id = id
         self.unmatched_counter = 0
+        self.unmatched_injection_frame = 5
         self.initialize_kalman(position)
 
     def initialize_kalman(self, position, velocity=(0,0)):
@@ -63,6 +64,23 @@ class TrackedObject:
 
 
 
+    # def update_kalman_filter(self, depth_manager, detected_object=None):
+
+    #     if detected_object:
+    #         x = detected_object.position[-1][0]
+    #         y = detected_object.position[-1][1]
+    #         measurement = np.array([[x], [y]])
+    #     else:
+    #         measurement = None
+
+        # update = self.kalman_tracker.update(measurement)
+        # kalman_position = (int(update[0, 0]), int(update[3, 0]))
+        # self.kalman_position.append(kalman_position)
+        # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+        # self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
+        # self.kalman_pred_position.append(np.array([
+        #         self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
+        #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
     def update_kalman_filter(self, depth_manager, detected_object=None):
 
         if detected_object:
@@ -72,14 +90,34 @@ class TrackedObject:
         else:
             measurement = None
 
-        update = self.kalman_tracker.update(measurement)
-        kalman_position = (int(update[0, 0]), int(update[3, 0]))
-        self.kalman_position.append(kalman_position)
-        self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
-        self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-        self.kalman_pred_position.append(np.array([
-                self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-                self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
+        if self.unmatched_counter == 1:
+            if len(self.kalman_velocity) < self.unmatched_injection_frame:
+                # Not enough frames for a meaningful calculation
+                avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity), axis=0).astype(int)
+            else:
+                avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity)[-self.unmatched_injection_frame:], axis=0).astype(int)
+            
+            last_pos_2d = self.kalman_position[-1]
+            self.initialize_kalman(last_pos_2d, velocity=avg_2d_kalman_velocity * 0.9)
+            print(f"ID: {self.id}")
+            print(f"last pos 2d: {last_pos_2d}")
+            print(f"avg_2d_kalman_velocity: {avg_2d_kalman_velocity}")
+            for i in range(1):
+                update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.8* (i+1)).astype(int)
+                print(f"update 2d: {update_2d}")
+                update = self.kalman_tracker.update(np.array([[update_2d[0]], [update_2d[1]]]))
+                print(f"2d response: x:{update[0,0]}, y:{update[3,0]}")
+
+        else:
+            update = self.kalman_tracker.update(measurement)
+            kalman_position = (int(update[0, 0]), int(update[3, 0]))
+            self.kalman_position.append(kalman_position)
+            self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+            self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
+            self.kalman_pred_position.append(np.array([
+                    self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
+                    self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
+
 
     def update_state_rematch(self, detected_object):
 
@@ -574,6 +612,7 @@ def match_objects(
                 cost_matrix,
                 row_indices,
                 col_indices,
+                row_ids,
             )
         )
 
@@ -582,8 +621,8 @@ def match_objects(
             matches_decoded.append((row_ids[match[0]], column_ids[match[1]]))
 
         unmatched_detected_decoded = []
-        for unmathced_det_id in unmatched_detected:
-            unmatched_detected_decoded.append(column_ids[unmathced_det_id])
+        for unmatched_det_id in unmatched_detected:
+            unmatched_detected_decoded.append(column_ids[unmatched_det_id])
 
         matches_cost = []
         for row, col in zip(row_indices, col_indices):
@@ -740,6 +779,7 @@ def filter_false_matches(
     cost_matrix,
     row_indices,
     col_indices,
+    row_ids,
 ):
     matches = []
     matches_unfiltered = []
@@ -749,6 +789,10 @@ def filter_false_matches(
     for row, col in zip(row_indices, col_indices):
         row = int(row)
         col = int(col)
+
+        #if the matched object has been untracked before increase tolerance
+        if row_ids[row]: cost_threshold += 0.1
+
         if cost_matrix[row, col] < cost_threshold:
             matches.append((row, col))
             unmatched_tracked.discard(row)
