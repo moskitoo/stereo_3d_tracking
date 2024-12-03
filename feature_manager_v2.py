@@ -91,6 +91,14 @@ class TrackedObject:
             measurement = None
 
         if self.unmatched_counter == 1:
+            
+            if len(self.position_3d) > 12:
+                self.last_seen_3d_pos = np.mean(self.position_3d[-12:-7], axis=0)
+            elif len(self.position_3d) > 8:
+                self.last_seen_3d_pos = np.mean(self.position_3d[-8:-3], axis=0)
+            else:
+                self.last_seen_3d_pos = np.mean(self.position_3d, axis=0)
+
             if len(self.kalman_velocity) < self.unmatched_injection_frame:
                 # Not enough frames for a meaningful calculation
                 avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity), axis=0).astype(int)
@@ -98,12 +106,12 @@ class TrackedObject:
                 avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity)[-self.unmatched_injection_frame:], axis=0).astype(int)
             
             last_pos_2d = self.kalman_position[-1]
-            self.initialize_kalman(last_pos_2d, velocity=avg_2d_kalman_velocity * 0.9)
+            self.initialize_kalman(last_pos_2d, velocity=avg_2d_kalman_velocity)
             print(f"ID: {self.id}")
             print(f"last pos 2d: {last_pos_2d}")
             print(f"avg_2d_kalman_velocity: {avg_2d_kalman_velocity}")
             for i in range(1):
-                update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.8* (i+1)).astype(int)
+                update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.9* (i+1)).astype(int)
                 print(f"update 2d: {update_2d}")
                 update = self.kalman_tracker.update(np.array([[update_2d[0]], [update_2d[1]]]))
                 print(f"2d response: x:{update[0,0]}, y:{update[3,0]}")
@@ -112,11 +120,22 @@ class TrackedObject:
             update = self.kalman_tracker.update(measurement)
             kalman_position = (int(update[0, 0]), int(update[3, 0]))
             self.kalman_position.append(kalman_position)
-            self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
             self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
             self.kalman_pred_position.append(np.array([
                     self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
                     self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
+            # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+            if self.unmatched_counter == 0:
+                self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+            else:
+                print(f"ID: {self.id}")
+                print(f"unmatched_counter powinno byc 1: {self.unmatched_counter}")
+                print(f"last seen pos: {self.last_seen_3d_pos}")
+                pos_3d = depth_manager.position_img_2d_to_world_3d(kalman_position)
+                print(f"pos og: {pos_3d}")
+                pos_3d[-1] = self.last_seen_3d_pos[-1]
+                print(f"pos corrected: {pos_3d}")
+                self.position_3d.append(pos_3d)
 
 
     def update_state_rematch(self, detected_object):

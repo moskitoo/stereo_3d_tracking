@@ -92,8 +92,8 @@ class ObjectTracker:
                         0 < obj.kalman_pred_position[-1][1] < self.image_height)
                 }
 
-                for obj in self.object_container.values():
-                    obj.position_3d.append(self.depth_manager.position_img_2d_to_world_3d(obj.kalman_position[-1]))
+                # for obj in self.object_container.values():
+                #     obj.position_3d.append(self.depth_manager.position_img_2d_to_world_3d(obj.kalman_position[-1]))
                 
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
@@ -144,7 +144,7 @@ class ObjectTracker:
                 cv2.imshow("Frame with matched objects", frame_with_matched_objects)
             
             for obj in self.object_container.values():
-                print(f"ID: {obj.id}, 2d kal. pos. {obj.kalman_position[-1]}, 3d pos. {obj.position_3d[-1]}, 3D-2D pos. {self.depth_manager.world_3d_to_img_2D(obj.position_3d[-1].astype(int))}")
+                print(f"ID: {obj.id}, 2d kal. pos. {obj.kalman_position[-1]}, 3d pos. {obj.position_3d[-3:]}, 3D-2D pos. {self.depth_manager.world_3d_to_img_2D(obj.position_3d[-1].astype(int))}")
 
             # cv2.imshow('Disparity Map', disparity)
 
@@ -160,7 +160,7 @@ class ObjectTracker:
                 break
 
 def main():
-    sequence_number = 3
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
