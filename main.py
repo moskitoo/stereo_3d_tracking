@@ -40,7 +40,7 @@ class ObjectTracker:
         self.tracking_dir = tracking_dir
         self.enable_tracking = enable_tracking
 
-    def process_frame(self, image, raw_image, path, disparity) -> None:
+    def process_frame(self, image, raw_image, path) -> None:
         """Process a single frame for object detection and tracking."""
         image = image.to(self.object_detector.device)
         image.requires_grad = True
@@ -66,13 +66,13 @@ class ObjectTracker:
 
             for detection_output in detection_outputs:
 
-                detected_objects = detect_objects_yolo(raw_image, detection_output)
+                detected_objects = detect_objects_yolo(raw_image, detection_output, self.depth_manager)
 
                 detected_objects = apply_nms(detected_objects, 0.5)
 
                 # Track objects
                 frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.rematching_frame_no)
-                self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container)
+                self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container, self.depth_manager)
 
                 if self.frame_number % self.rematching_freq == 0:
                     correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
@@ -89,8 +89,6 @@ class ObjectTracker:
                         0 < obj.kalman_pred_position[-1][1] < self.image_height)
                 }
                 
-                self.extend_tracked_position_to_3d(disparity)
-
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
                     # frame_with_detected_objqects, 
@@ -107,9 +105,6 @@ class ObjectTracker:
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
 
-    def extend_tracked_position_to_3d(self, disparity):
-        pass
-
 
     def run(self):
         """Run object tracking on all frames."""
@@ -121,9 +116,10 @@ class ObjectTracker:
             if self.previous_frame is None:
                 self.previous_frame = left_raw_img.copy()
 
-            disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
+            # disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
+            self.depth_manager.update_disparity_map(left_raw_img, right_raw_img)
 
-            combined_frames, frame_with_matched_objects, detection_outputs = self.process_frame(left_image, left_raw_img.copy(), left_img_path, disparity)
+            combined_frames, frame_with_matched_objects, detection_outputs = self.process_frame(left_image, left_raw_img.copy(), left_img_path)
 
             if self.save_detections:
                 pickle_dir = os.path.join(self.detections_dir, f'seq{self.sequence_number}')
@@ -140,6 +136,9 @@ class ObjectTracker:
 
                 cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
                 cv2.imshow("Frame with matched objects", frame_with_matched_objects)
+            
+            for obj in self.object_container.values():
+                print(f"ID: {obj.id}, 2d kal. pos. {obj.kalman_position[-1]}, 3d pos. {obj.position_3d[-1]}, 3D-2D pos. {self.depth_manager.world_3d_to_img_2D(obj.position_3d[-1].astype(int))}")
 
             # cv2.imshow('Disparity Map', disparity)
 
@@ -147,12 +146,12 @@ class ObjectTracker:
 
             self.frame_number += 1
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
                 break
 
 def main():
-    sequence_number = 1
+    sequence_number = 2
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 

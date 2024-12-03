@@ -23,9 +23,10 @@ match_correct_frame_no = 5
 
 
 class TrackedObject:
-    def __init__(self, type, position, bbox, features, color, id):
+    def __init__(self, type, position, world_3d_position, bbox, features, color, id):
         self.type = type
         self.position = [position]
+        self.position_3d = [world_3d_position]
         self.bbox = bbox
         self.features = features
         self.color = color
@@ -47,7 +48,7 @@ class TrackedObject:
     def clone(self):
         return copy.deepcopy(self)
 
-    def update_state(self, detected_object=None):
+    def update_state(self, depth_manager, detected_object=None):
         if detected_object:
             self.position.append(detected_object.position[-1])
 
@@ -55,9 +56,9 @@ class TrackedObject:
             self.features = detected_object.features
             self.unmatched_counter = 0
 
-        self.update_kalman_filter(detected_object)
+        self.update_kalman_filter(detected_object=detected_object, depth_manager=depth_manager)
 
-    def update_kalman_filter(self, detected_object=None):
+    def update_kalman_filter(self, depth_manager, detected_object=None):
 
         if detected_object:
             x = detected_object.position[-1][0]
@@ -67,7 +68,9 @@ class TrackedObject:
             measurement = None
 
         update = self.kalman_tracker.update(measurement)
-        self.kalman_position.append((int(update[0, 0]), int(update[3, 0])))
+        kalman_position = (int(update[0, 0]), int(update[3, 0]))
+        self.kalman_position.append(kalman_position)
+        self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
         self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
         self.kalman_pred_position.append(
             [
@@ -83,6 +86,11 @@ class TrackedObject:
         else:
             new_position = detected_object.position[-match_correct_frame_no:]
 
+        if len(detected_object.position_3d) < match_correct_frame_no:
+            new_position_3d = detected_object.position_3d
+        else:
+            new_position_3d = detected_object.position_3d[-match_correct_frame_no:]
+
         # print(f"obj {self.id} new pos: {new_position}")
 
         # print(f"obj {self.id}  pre pos: {self.position}")
@@ -92,6 +100,12 @@ class TrackedObject:
         else:
             self.position = self.position[:-match_correct_frame_no]
             self.position += new_position
+
+        if len(self.position_3d) < match_correct_frame_no - 1:
+            self.position_3d = new_position_3d
+        else:
+            self.position_3d = self.position_3d[:-match_correct_frame_no]
+            self.position_3d += new_position_3d
 
         # print(f"obj {self.id} post pos: {self.position}")
 
@@ -261,33 +275,7 @@ def get_detection_results(frame_number, seq_num):
     return bboxes, obj_types
 
 
-def detect_objects(frame, detection_output):
-    sift = cv2.SIFT_create()
-    detected_objects = []
-    for id, [bbox, obj_type] in enumerate(
-        zip(detection_output[0], detection_output[1])
-    ):
-        bbox_obj = BoundingBox(*bbox)
-
-        cropped_frame = bbox_obj.get_bbox_img(frame)
-        frame_gray = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2GRAY)
-        kp, des = sift.detectAndCompute(frame_gray, None)
-
-        if des is None:
-            features = np.zeros(128)
-        else:
-            features = np.mean(des, axis=0)
-
-        detected_objects.append(
-            TrackedObject(
-                obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id
-            )
-        )
-
-    return detected_objects
-
-
-def detect_objects_yolo(frame, detection_output):
+def detect_objects_yolo(frame, detection_output, depth_manager):
     sift = cv2.SIFT_create()
     detected_objects = {}
     print(type(detection_output))
@@ -306,8 +294,10 @@ def detect_objects_yolo(frame, detection_output):
         else:
             features = np.mean(des, axis=0)
 
+        world_3d_position = depth_manager.img_2d_to_world_3d(bbox_obj)
+
         detected_objects[id] = TrackedObject(
-            obj_type, bbox_obj.position, bbox_obj, features, get_rand_color(), id
+            obj_type, bbox_obj.position, world_3d_position, bbox_obj, features, get_rand_color(), id
         )
 
     return detected_objects
@@ -539,7 +529,7 @@ def get_cost_matrix(
 
 
 def match_objects(
-    detected_objects, object_container, cost_threshold=1.5, unmatched_threshold=45
+    detected_objects, object_container, depth_manager, cost_threshold=1.5, unmatched_threshold=45,
 ):
     global id_counter
     global current_frame_number
@@ -600,7 +590,7 @@ def match_objects(
         for tracked_object_id, detect_object_id in matches_decoded:
             tracked_object = object_container[tracked_object_id]
             detected_object = detected_objects[detect_object_id]
-            tracked_object.update_state(detected_object)
+            tracked_object.update_state(detected_object=detected_object, depth_manager=depth_manager)
 
         # State 3: Remove non matched trakced objects
         # Convert unmatched_tracked to a set for faster lookup
@@ -611,7 +601,7 @@ def match_objects(
         # Remove unmatched objects after several unsuccessful matches
         for unmatched_id in unmatched_tracked_set:
             object_container[unmatched_id].unmatched_counter += 1
-            object_container[unmatched_id].update_state()
+            object_container[unmatched_id].update_state(depth_manager=depth_manager)
 
         object_container = {
             id: tracked_object
@@ -627,6 +617,7 @@ def match_objects(
             new_tracked_object = TrackedObject(
                 non_matched_object.type,
                 non_matched_object.position[-1],
+                non_matched_object.position_3d[-1],
                 non_matched_object.bbox,
                 non_matched_object.features,
                 non_matched_object.color,
