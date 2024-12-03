@@ -11,6 +11,7 @@ import torch
 import copy
 
 from kalman_filter import KalmanTracker
+from kalman_filter_3d import *
 
 
 id_counter = 0
@@ -100,6 +101,12 @@ class TrackedObject:
         self.bbox = detected_object.bbox
         self.features = detected_object.features
         self.unmatched_counter = 0
+
+    def initialize_3d_kalman(self, world_3d_position, velocity=(0,0,0)):
+        self.kalman_tracker3d = KalmanTracker3D()
+        self.kalman_tracker3d.X[0] = world_3d_position[0]
+        self.kalman_tracker3d.X[3] = world_3d_position[1]
+        self.kalman_tracker3d.X[6] = world_3d_position[2]
 
         # print(f"pred pos kalman: {self.kalman_position}")
         # print(f"pred velocity kalman: {self.kalman_velocity}")

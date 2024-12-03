@@ -1,4 +1,4 @@
 data/*
 cost_matrices
 __pycache__
-/results
+results/
