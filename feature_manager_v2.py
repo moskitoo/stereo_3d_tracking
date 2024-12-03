@@ -52,13 +52,13 @@ class TrackedObject:
         self.update_kalman_filter(detected_object=detected_object, depth_manager=depth_manager)
         
         if detected_object:
-            self.position.append(detected_object.position[-1])
+            self.position.append(np.array(detected_object.position[-1]))
 
             self.bbox = detected_object.bbox
             self.features = detected_object.features
             self.unmatched_counter = 0
         else:
-            self.position.append(self.kalman_position[-1])
+            self.position.append(np.array(self.kalman_position[-1]))
             self.bbox.translate(self.kalman_position[-1])
 
 
@@ -77,12 +77,9 @@ class TrackedObject:
         self.kalman_position.append(kalman_position)
         self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
         self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-        self.kalman_pred_position.append(
-            [
+        self.kalman_pred_position.append(np.array([
                 self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-                self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
-            ]
-        )
+                self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
 
     def update_state_rematch(self, detected_object):
 
@@ -185,7 +182,7 @@ class BoundingBox:
     def get_bbox_centre(self):
         x = (self.left + self.right) / 2
         y = (self.top + self.bottom) / 2
-        self.position = np.array((x, y)).astype(int)
+        self.position = np.array([x, y]).astype(int)
 
     def get_bbox_img(self, frame):
         return frame[self.top: self.bottom, self.left: self.right]
@@ -454,7 +451,7 @@ def get_cost_matrix(
 
             # Kalman orientation cost (normalized)
             kalman_vector = (
-                tracked_object.kalman_pred_position -
+                tracked_object.kalman_pred_position[-1] -
                 tracked_object.position[-1]
             )
             detection_vector = detected_object.position[0] - \
