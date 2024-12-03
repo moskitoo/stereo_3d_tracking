@@ -9,6 +9,8 @@ from feature_manager_v2 import *
 from object_detection import *
 from depth_image_manager import *
 
+from visualization_3d import *
+
 
 class ObjectTracker:
     """Manages object tracking across video frames."""
@@ -23,6 +25,7 @@ class ObjectTracker:
         self.sequence_number = sequence_number
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
+        self.visualizer = ObjectVisualizer()
         self.object_container = {}
         self.previous_frame = None
         self.frame_number = 0
@@ -88,6 +91,9 @@ class ObjectTracker:
                     if (0 < obj.kalman_pred_position[-1][0] < self.image_width and 
                         0 < obj.kalman_pred_position[-1][1] < self.image_height)
                 }
+
+                for obj in self.object_container.values():
+                    obj.position_3d.append(self.depth_manager.position_img_2d_to_world_3d(obj.kalman_position[-1]))
                 
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
@@ -142,16 +148,19 @@ class ObjectTracker:
 
             # cv2.imshow('Disparity Map', disparity)
 
+            self.visualizer.render(self.object_container)
+
             self.previous_frame = left_raw_img.copy()
 
             self.frame_number += 1
 
             key = cv2.waitKey(0) & 0xFF
             if key == ord('q'):  # Quit
+                self.visualizer.close()
                 break
 
 def main():
-    sequence_number = 2
+    sequence_number = 3
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
