@@ -25,7 +25,7 @@ class ObjectTracker:
         self.sequence_number = sequence_number
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
-        self.visualizer = ObjectVisualizer()
+        # self.visualizer = ObjectVisualizer()
         self.object_container = {}
         self.previous_frame = None
         self.frame_number = 0
@@ -42,6 +42,15 @@ class ObjectTracker:
         self.save_tracking = save_tracking
         self.tracking_dir = tracking_dir
         self.enable_tracking = enable_tracking
+
+        self.visualizer = ObjectVisualizer(
+                                            display_plots={
+            'main_4subplot': False,
+            '3d_separate': False,
+            'xy_separate': False,
+            'xz_separate': False,
+            'yx_separate': False
+        })
 
     def process_frame(self, image, raw_image, path) -> None:
         """Process a single frame for object detection and tracking."""
@@ -98,6 +107,8 @@ class ObjectTracker:
                     if obj.id == 0 or obj.id == 14:
                         print(f"ID: {obj.id}, Kalman Position: {obj.kalman_position[-5:]}, Kalman Velocity: {obj.kalman_velocity[-5:]}")
                 
+                self.visualizer.render(self.object_container)
+
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
                     # frame_with_detected_objqects, 
@@ -117,6 +128,9 @@ class ObjectTracker:
 
     def run(self):
         """Run object tracking on all frames."""
+
+        auto_play = False
+
         for left_image, right_image, left_raw_img, right_raw_img, left_img_path, right_img_path in tqdm(self.object_detector.dataloader):
 
             left_raw_img = self.process_raw_image(left_raw_img)
@@ -156,14 +170,32 @@ class ObjectTracker:
             self.previous_frame = left_raw_img.copy()
 
             self.frame_number += 1
+            # Modified key handling
+            if auto_play:
+                key = cv2.waitKey(1) & 0xFF
+            else:
+                key = cv2.waitKey(0) & 0xFF
 
-            key = cv2.waitKey(0) & 0xFF
-            if key == ord('q'):  # Quit
+            # Toggle auto-play mode
+            if key == ord(' '):  # Spacebar toggles auto-play
+                auto_play = not auto_play
+                print(f"Auto-play {'enabled' if auto_play else 'disabled'}")
+
+            # Exit on 'q'
+            if key == ord('q'):  
                 self.visualizer.close()
                 break
 
+            # Optional: Add frame navigation when not in auto-play
+            if not auto_play:
+                if key == ord('n'):  # Next frame
+                    continue
+                elif key == ord('p'):  # Previous frame (reset frame number)
+                    self.frame_number = max(0, self.frame_number - 2)
+
+
 def main():
-    sequence_number = 2
+    sequence_number = 3
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
