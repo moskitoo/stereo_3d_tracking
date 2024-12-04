@@ -111,7 +111,7 @@ class TrackedObject:
             print(f"last pos 2d: {last_pos_2d}")
             print(f"avg_2d_kalman_velocity: {avg_2d_kalman_velocity}")
             for i in range(1):
-                update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.9* (i+1)).astype(int)
+                update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.4* (i+1)).astype(int)
                 print(f"update 2d: {update_2d}")
                 update = self.kalman_tracker.update(np.array([[update_2d[0]], [update_2d[1]]]))
                 print(f"2d response: x:{update[0,0]}, y:{update[3,0]}")
