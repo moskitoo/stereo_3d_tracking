@@ -94,6 +94,9 @@ class ObjectTracker:
 
                 # for obj in self.object_container.values():
                 #     obj.position_3d.append(self.depth_manager.position_img_2d_to_world_3d(obj.kalman_position[-1]))
+                for obj in self.object_container.values():
+                    if obj.id == 0 or obj.id == 14:
+                        print(f"ID: {obj.id}, Kalman Position: {obj.kalman_position[-5:]}, Kalman Velocity: {obj.kalman_velocity[-5:]}")
                 
                 combined_frames = combine_frames([
                     frame_with_tracked_objects, 
@@ -160,7 +163,7 @@ class ObjectTracker:
                 break
 
 def main():
-    sequence_number = 2
+    sequence_number = 1
     tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
     tracker.run()
 
