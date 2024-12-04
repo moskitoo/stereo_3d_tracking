@@ -48,7 +48,7 @@ class ObjectTracker:
             'main_4subplot': False,
             '3d_separate': False,
             'xy_separate': False,
-            'xz_separate': False,
+            'xz_separate': True,
             'yx_separate': False
         })
 

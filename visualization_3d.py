@@ -7,9 +7,9 @@ import matplotlib.image as mpimg
 class ObjectVisualizer:
     def __init__(self, 
                  figsize=(16, 12), 
-                 xlim=(-20, 20), 
+                 xlim=(-15, 20), 
                  ylim=(-2, 2), 
-                 zlim=(-3, 40),
+                 zlim=(-10, 60),
                  display_plots=None):
         """
         Initialize 3D visualization with Matplotlib, with configurable plot display
