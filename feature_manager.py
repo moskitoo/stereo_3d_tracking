@@ -1,17 +1,16 @@
+import copy
+import random
+from datetime import datetime
+
 import cv2
 import numpy as np
-import random
-from frame_manager import *
-import time
-from sklearn.metrics.pairwise import cosine_similarity
-from scipy.optimize import linear_sum_assignment
 import pandas as pd
-from datetime import datetime
 import torch
-import copy
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics.pairwise import cosine_similarity
 
+from frame_manager import *
 from kalman_filter import KalmanTracker
-
 
 id_counter = 0
 current_frame_number = 0
@@ -64,23 +63,6 @@ class TrackedObject:
             self.position.append(np.array(self.kalman_position[-1]))
             self.bbox.translate(self.kalman_position[-1])
 
-    # def update_kalman_filter(self, depth_manager, detected_object=None):
-
-    #     if detected_object:
-    #         x = detected_object.position[-1][0]
-    #         y = detected_object.position[-1][1]
-    #         measurement = np.array([[x], [y]])
-    #     else:
-    #         measurement = None
-
-    # update = self.kalman_tracker.update(measurement)
-    # kalman_position = (int(update[0, 0]), int(update[3, 0]))
-    # self.kalman_position.append(kalman_position)
-    # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
-    # self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-    # self.kalman_pred_position.append(np.array([
-    #         self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-    #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
     def update_kalman_filter(self, depth_manager, detected_object=None):
         if detected_object:
             x = detected_object.position[-1][0]
@@ -141,30 +123,18 @@ class TrackedObject:
                     ]
                 )
             )
-            # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
             if self.unmatched_counter == 0:
                 self.position_3d.append(
                     depth_manager.position_img_2d_to_world_3d(kalman_position)
                 )
             else:
                 print(f"ID: {self.id}")
-                print(f"unmatched_counter powinno byc 1: {self.unmatched_counter}")
                 print(f"last seen pos: {self.last_seen_3d_pos}")
                 pos_3d = depth_manager.position_img_2d_to_world_3d(kalman_position)
                 print(f"pos og: {pos_3d}")
                 pos_3d[-1] = self.last_seen_3d_pos[-1]
                 print(f"pos corrected: {pos_3d}")
                 self.position_3d.append(pos_3d)
-
-        # FOR SEQ 1
-        # update = self.kalman_tracker.update(measurement)
-        # kalman_position = (int(update[0, 0]), int(update[3, 0]))
-        # self.kalman_position.append(kalman_position)
-        # self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-        # self.kalman_pred_position.append(np.array([
-        #         self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-        #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
-        # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
 
     def update_state_rematch(self, detected_object):
         if len(detected_object.position) < match_correct_frame_no:
@@ -214,28 +184,18 @@ class TrackedObject:
     def predict_position_from_prev_state(self, prev_frame_no):
         velocity_array = np.array(self.kalman_velocity)
 
-        # print(f"ID: {self.id}")
-
-        # print(f"velocities: {velocity_array}")
-
         # Check the length of the velocity array
         if len(velocity_array) < prev_frame_no:
             # Not enough frames for a meaningful calculation
             avg_kalman_vector = np.mean(velocity_array, axis=0)
-            # print(f"velocities: {velocity_array}")
         elif len(velocity_array) < 2 * prev_frame_no:
             # Use the available frames before match_correct_frame_no
             avg_kalman_vector = np.mean(velocity_array[:prev_frame_no], axis=0)
-            # print(f"velocities: {velocity_array[:prev_frame_no]}")
         else:
             # Use the specified range for averaging
             avg_kalman_vector = np.mean(
                 velocity_array[-2 * prev_frame_no : -prev_frame_no], axis=0
             )
-            # print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
-            # print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
-
-        # print(f"avg kalman vector: {avg_kalman_vector}")
 
         # Estimate position using average velocity
         if len(self.position) < prev_frame_no:
@@ -255,7 +215,7 @@ class TrackedObject:
 
 class BoundingBox:
     def __init__(self, bbox_left, bbox_top, bbox_right, bbox_bottom):
-        if type(bbox_left) == torch.Tensor:
+        if isinstance(bbox_left, torch.Tensor):
             self.left = int(bbox_left.item())
             self.top = int(bbox_top.item())
             self.right = int(bbox_right.item())
@@ -300,12 +260,6 @@ def visualize_objects(frame, tracked_objects, match_correct_frame_no):
     for obj in tracked_objects.values():
         x = obj.position[-1][0]
         y = obj.position[-1][1]
-
-        # if obj.id < 5:
-        #     print(f"position (t): {obj.position}")
-        #     print(f"kalman position: {obj.kalman_position}")
-        #     print(f"kalman velocity: {obj.kalman_velocity}")
-        #     print(f"kalman position predicted: {obj.kalman_pred_position}")
 
         # Calculate a longer arrow by extending the line
         dx = obj.kalman_pred_position[-1][0] - obj.kalman_position[-1][0]
@@ -1056,11 +1010,6 @@ def save_cost_matrices():
     cost_matrix_storage.clear()
 
 
-def print_objects(print_objects):
-    for obj in print_objects:
-        print(f"Object ID: {obj.id}, Position: {obj.position}")
-
-
 def main():
     global object_container
     global current_frame_number
@@ -1070,12 +1019,8 @@ def main():
     frame_end = 140  # End frame number
     sequence_number = 1  # Sequence number
 
-    # frame_end = 205  # End frame number
-    # sequence_number = 2  # Sequence number
-
     object_container = []
     current_frame_number = frame_start
-    frame_1_prev = None
 
     while True:
         print(f"frame number: {current_frame_number}")
