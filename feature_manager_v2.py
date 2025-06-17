@@ -35,7 +35,7 @@ class TrackedObject:
         self.unmatched_injection_frame = 5
         self.initialize_kalman(position)
 
-    def initialize_kalman(self, position, velocity=(0,0)):
+    def initialize_kalman(self, position, velocity=(0, 0)):
         self.kalman_tracker = KalmanTracker()
         self.kalman_tracker.X[0] = position[0]
         self.kalman_tracker.X[3] = position[1]
@@ -45,13 +45,15 @@ class TrackedObject:
 
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
-    
+
     def clone(self):
         return copy.deepcopy(self)
 
     def update_state(self, depth_manager, detected_object=None):
-        self.update_kalman_filter(detected_object=detected_object, depth_manager=depth_manager)
-        
+        self.update_kalman_filter(
+            detected_object=detected_object, depth_manager=depth_manager
+        )
+
         if detected_object:
             self.position.append(np.array(detected_object.position[-1]))
 
@@ -62,8 +64,6 @@ class TrackedObject:
             self.position.append(np.array(self.kalman_position[-1]))
             self.bbox.translate(self.kalman_position[-1])
 
-
-
     # def update_kalman_filter(self, depth_manager, detected_object=None):
 
     #     if detected_object:
@@ -73,16 +73,15 @@ class TrackedObject:
     #     else:
     #         measurement = None
 
-        # update = self.kalman_tracker.update(measurement)
-        # kalman_position = (int(update[0, 0]), int(update[3, 0]))
-        # self.kalman_position.append(kalman_position)
-        # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
-        # self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-        # self.kalman_pred_position.append(np.array([
-        #         self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-        #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
+    # update = self.kalman_tracker.update(measurement)
+    # kalman_position = (int(update[0, 0]), int(update[3, 0]))
+    # self.kalman_position.append(kalman_position)
+    # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+    # self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
+    # self.kalman_pred_position.append(np.array([
+    #         self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
+    #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
     def update_kalman_filter(self, depth_manager, detected_object=None):
-
         if detected_object:
             x = detected_object.position[-1][0]
             y = detected_object.position[-1][1]
@@ -91,7 +90,6 @@ class TrackedObject:
             measurement = None
 
         if self.unmatched_counter == 1:
-            
             if len(self.position_3d) > 12:
                 self.last_seen_3d_pos = np.mean(self.position_3d[-12:-7], axis=0)
             elif len(self.position_3d) > 8:
@@ -101,10 +99,15 @@ class TrackedObject:
 
             if len(self.kalman_velocity) < self.unmatched_injection_frame:
                 # Not enough frames for a meaningful calculation
-                avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity), axis=0).astype(int)
+                avg_2d_kalman_velocity = np.mean(
+                    np.array(self.kalman_velocity), axis=0
+                ).astype(int)
             else:
-                avg_2d_kalman_velocity = np.mean(np.array(self.kalman_velocity)[-self.unmatched_injection_frame:], axis=0).astype(int)
-            
+                avg_2d_kalman_velocity = np.mean(
+                    np.array(self.kalman_velocity)[-self.unmatched_injection_frame :],
+                    axis=0,
+                ).astype(int)
+
             last_pos_2d = self.kalman_position[-1]
             self.initialize_kalman(last_pos_2d, velocity=avg_2d_kalman_velocity)
             print(f"ID: {self.id}")
@@ -112,24 +115,37 @@ class TrackedObject:
             print(f"avg_2d_kalman_velocity: {avg_2d_kalman_velocity}")
             for i in range(1):
                 if self.type < 2:
-                    update_2d = last_pos_2d + (avg_2d_kalman_velocity * 0.4* (i+1)).astype(int)
+                    update_2d = last_pos_2d + (
+                        avg_2d_kalman_velocity * 0.4 * (i + 1)
+                    ).astype(int)
                 else:
-                    update_2d = last_pos_2d + (avg_2d_kalman_velocity * 3.5* (i+1)).astype(int)
+                    update_2d = last_pos_2d + (
+                        avg_2d_kalman_velocity * 3.5 * (i + 1)
+                    ).astype(int)
                 print(f"update 2d: {update_2d}")
-                update = self.kalman_tracker.update(np.array([[update_2d[0]], [update_2d[1]]]))
-                print(f"2d response: x:{update[0,0]}, y:{update[3,0]}")
+                update = self.kalman_tracker.update(
+                    np.array([[update_2d[0]], [update_2d[1]]])
+                )
+                print(f"2d response: x:{update[0, 0]}, y:{update[3, 0]}")
 
         else:
             update = self.kalman_tracker.update(measurement)
             kalman_position = (int(update[0, 0]), int(update[3, 0]))
             self.kalman_position.append(kalman_position)
             self.kalman_velocity.append((int(update[1, 0]), int(update[4, 0])))
-            self.kalman_pred_position.append(np.array([
-                    self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
-                    self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
+            self.kalman_pred_position.append(
+                np.array(
+                    [
+                        self.kalman_position[-1][0] + self.kalman_velocity[-1][0],
+                        self.kalman_position[-1][1] + self.kalman_velocity[-1][1],
+                    ]
+                )
+            )
             # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
             if self.unmatched_counter == 0:
-                self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
+                self.position_3d.append(
+                    depth_manager.position_img_2d_to_world_3d(kalman_position)
+                )
             else:
                 print(f"ID: {self.id}")
                 print(f"unmatched_counter powinno byc 1: {self.unmatched_counter}")
@@ -150,10 +166,7 @@ class TrackedObject:
         #         self.kalman_position[-1][1] + self.kalman_velocity[-1][1]]))
         # self.position_3d.append(depth_manager.position_img_2d_to_world_3d(kalman_position))
 
-
-
     def update_state_rematch(self, detected_object):
-
         if len(detected_object.position) < match_correct_frame_no:
             new_position = detected_object.position
         else:
@@ -167,7 +180,7 @@ class TrackedObject:
         # print(f"obj {self.id} new pos: {new_position}")
 
         # print(f"obj {self.id}  pre pos: {self.position}")
-        
+
         if len(self.position) < match_correct_frame_no - 1:
             self.position = new_position
         else:
@@ -191,16 +204,18 @@ class TrackedObject:
         # print(f"pred pos kalman: {self.kalman_position}")
         # print(f"pred velocity kalman: {self.kalman_velocity}")
 
-        self.initialize_kalman(detected_object.position[-1], velocity=detected_object.kalman_velocity[-1])
-        
+        self.initialize_kalman(
+            detected_object.position[-1], velocity=detected_object.kalman_velocity[-1]
+        )
+
         # print(f"post pos kalman: {self.kalman_position}")
         # print(f"post velocity kalman: {self.kalman_velocity}")
-    
+
     def predict_position_from_prev_state(self, prev_frame_no):
         velocity_array = np.array(self.kalman_velocity)
 
         # print(f"ID: {self.id}")
-        
+
         # print(f"velocities: {velocity_array}")
 
         # Check the length of the velocity array
@@ -214,20 +229,26 @@ class TrackedObject:
             # print(f"velocities: {velocity_array[:prev_frame_no]}")
         else:
             # Use the specified range for averaging
-            avg_kalman_vector = np.mean(velocity_array[-2 * prev_frame_no:-prev_frame_no], axis=0)
+            avg_kalman_vector = np.mean(
+                velocity_array[-2 * prev_frame_no : -prev_frame_no], axis=0
+            )
             # print(f"velocities: {velocity_array[-2 * prev_frame_no:-prev_frame_no]}")
             # print(f"Using range: -2 * match_correct_frame_no to -match_correct_frame_no.")
 
         # print(f"avg kalman vector: {avg_kalman_vector}")
-        
+
         # Estimate position using average velocity
         if len(self.position) < prev_frame_no:
             estimated_position = self.position[0] + avg_kalman_vector * prev_frame_no
         else:
-            estimated_position = self.position[-prev_frame_no] + avg_kalman_vector * prev_frame_no
+            estimated_position = (
+                self.position[-prev_frame_no] + avg_kalman_vector * prev_frame_no
+            )
 
         drift = np.linalg.norm(estimated_position - self.position[-1])
-        print(f"ID: {self.id}, Drift: {round(drift, 2)}, Estimated position: {estimated_position}, Actual position: {self.position[-1]}")
+        print(
+            f"ID: {self.id}, Drift: {round(drift, 2)}, Estimated position: {estimated_position}, Actual position: {self.position[-1]}"
+        )
 
         return estimated_position
 
@@ -256,19 +277,19 @@ class BoundingBox:
         self.position = np.array([x, y]).astype(int)
 
     def get_bbox_img(self, frame):
-        return frame[self.top: self.bottom, self.left: self.right]
+        return frame[self.top : self.bottom, self.left : self.right]
 
     def get_bbox_area(self):
         return self.width * self.height
 
     def get_bbox_aspect_ratio(self):
         return self.width / self.height
-    
+
     def translate(self, new_center):
-        self.left = new_center[0] - int(self.width/2)
-        self.top = new_center[1] - int(self.height/2)
-        self.right = new_center[0] + int(self.width/2)
-        self.bottom = new_center[1] + int(self.height/2)
+        self.left = new_center[0] - int(self.width / 2)
+        self.top = new_center[1] - int(self.height / 2)
+        self.right = new_center[0] + int(self.width / 2)
+        self.bottom = new_center[1] + int(self.height / 2)
 
 
 def visualize_objects(frame, tracked_objects, match_correct_frame_no):
@@ -297,12 +318,14 @@ def visualize_objects(frame, tracked_objects, match_correct_frame_no):
         )
 
         if len(obj.kalman_position) >= 5:
-            cv2.arrowedLine(frame_copy, obj.kalman_position[-5],
-                        extended_end, obj.color, 2)
+            cv2.arrowedLine(
+                frame_copy, obj.kalman_position[-5], extended_end, obj.color, 2
+            )
             # take the oldest one when we dont have enough records
-        else: 
-            cv2.arrowedLine(frame_copy, obj.kalman_position[0],
-                        extended_end, obj.color, 2)             
+        else:
+            cv2.arrowedLine(
+                frame_copy, obj.kalman_position[0], extended_end, obj.color, 2
+            )
 
         cv2.circle(frame_copy, obj.kalman_pred_position[-1], 10, obj.color, -1)
         cv2.putText(
@@ -376,30 +399,39 @@ def detect_objects_yolo(frame, detection_output, depth_manager):
         world_3d_position = depth_manager.img_2d_to_world_3d(bbox_obj)
 
         detected_objects[id] = TrackedObject(
-            obj_type, bbox_obj.position, world_3d_position, bbox_obj, features, get_rand_color(), id
+            obj_type,
+            bbox_obj.position,
+            world_3d_position,
+            bbox_obj,
+            features,
+            get_rand_color(),
+            id,
         )
 
     return detected_objects
 
+
 def apply_nms(detected_objects, nms_iou_threshold):
     # Convert to list for easier sorting and processing
     objects_list = list(detected_objects.items())
-    
+
     objects_to_keep = []
-    
+
     while objects_list:
         # Take the object with highest confidence
         current_idx, current_obj = objects_list.pop(0)
         objects_to_keep.append((current_idx, current_obj))
-        
+
         # Remove objects with high IOU
         objects_list = [
-            (idx, obj) for (idx, obj) in objects_list 
+            (idx, obj)
+            for (idx, obj) in objects_list
             if IOU(current_obj.bbox, obj.bbox) <= nms_iou_threshold
         ]
-    
+
     # Convert back to dictionary
     return dict(objects_to_keep)
+
 
 def IOU(box1, box2):
     x1 = max(box1.left, box2.left)
@@ -432,7 +464,7 @@ def get_cost_matrix(
     feat_w=0.1,
     kalman_vector_w=1.0,
     iou_threshold=0.95,
-    past_pos_id = 5
+    past_pos_id=5,
 ):
     num_tracked = len(object_container)
     num_detections = len(detected_objects)
@@ -441,8 +473,7 @@ def get_cost_matrix(
     # Initialize detailed cost matrix with shape (num_tracked, num_detections, 6)
     # Added extra dimension for total cost
     cost_matrix_detailed = np.zeros((num_tracked, num_detections, 5))
-    cost_matrix_detailed_not_scaled = np.zeros(
-        (num_tracked, num_detections, 5))
+    cost_matrix_detailed_not_scaled = np.zeros((num_tracked, num_detections, 5))
     cost_matrix_basic = np.zeros((num_tracked, num_detections, 3))
 
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
@@ -469,17 +500,15 @@ def get_cost_matrix(
             # Kalman orientation cost (Euclidean)
             if len(tracked_object.position) >= past_pos_id:
                 kalman_vector = (
-                    tracked_object.kalman_pred_position -
-                    tracked_object.position[-past_pos_id]
+                    tracked_object.kalman_pred_position
+                    - tracked_object.position[-past_pos_id]
                 )
                 # take the oldest one when we dont have enough records
-            else: 
+            else:
                 kalman_vector = (
-                    tracked_object.kalman_pred_position -
-                    tracked_object.position[0]
+                    tracked_object.kalman_pred_position - tracked_object.position[0]
                 )
-            detection_vector = detected_object.position[0] - \
-                tracked_object.position[-1]
+            detection_vector = detected_object.position[0] - tracked_object.position[-1]
             kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
             max_kalman_euc_cost = max(max_kalman_euc_cost, kalman_euc_cost)
 
@@ -522,11 +551,9 @@ def get_cost_matrix(
 
             # Kalman orientation cost (normalized)
             kalman_vector = (
-                tracked_object.kalman_pred_position[-1] -
-                tracked_object.position[-1]
+                tracked_object.kalman_pred_position[-1] - tracked_object.position[-1]
             )
-            detection_vector = detected_object.position[0] - \
-                tracked_object.position[-1]
+            detection_vector = detected_object.position[0] - tracked_object.position[-1]
             kalman_euc_cost = np.linalg.norm(kalman_vector - detection_vector)
             kalman_euc_cost_normalized = (
                 kalman_euc_cost / max_kalman_euc_cost if max_kalman_euc_cost > 0 else 0
@@ -566,8 +593,7 @@ def get_cost_matrix(
                 class_cost,
                 total_cost,
             ]
-            cost_matrix_basic[i, j] = [round(x, 2)
-                                       for x in detailed_cost_basic]
+            cost_matrix_basic[i, j] = [round(x, 2) for x in detailed_cost_basic]
             cost_matrix_detailed[i, j] = [round(x, 2) for x in detailed_cost]
             cost_matrix_detailed_not_scaled[i, j] = [
                 round(x, 2) for x in detailed_cost_not_scaled
@@ -608,7 +634,11 @@ def get_cost_matrix(
 
 
 def match_objects(
-    detected_objects, object_container, depth_manager, cost_threshold=1.5, unmatched_threshold=45,
+    detected_objects,
+    object_container,
+    depth_manager,
+    cost_threshold=1.5,
+    unmatched_threshold=45,
 ):
     global id_counter
     global current_frame_number
@@ -670,7 +700,9 @@ def match_objects(
         for tracked_object_id, detect_object_id in matches_decoded:
             tracked_object = object_container[tracked_object_id]
             detected_object = detected_objects[detect_object_id]
-            tracked_object.update_state(detected_object=detected_object, depth_manager=depth_manager)
+            tracked_object.update_state(
+                detected_object=detected_object, depth_manager=depth_manager
+            )
 
         # State 3: Remove non matched trakced objects
         # Convert unmatched_tracked to a set for faster lookup
@@ -713,13 +745,17 @@ def match_objects(
 
         return object_container, matches, matches_decoded
 
-def correct_matches(object_container, match_correct_frame_no, drift_threshold, cost_threshold):
 
+def correct_matches(
+    object_container, match_correct_frame_no, drift_threshold, cost_threshold
+):
     mismatched_instances = []
     for i, (tracked_id, tracked_object) in enumerate(object_container.items()):
         # Convert kalman_velocity to a numpy array for vectorized operations
-        
-        estimated_position = tracked_object.predict_position_from_prev_state(match_correct_frame_no)
+
+        estimated_position = tracked_object.predict_position_from_prev_state(
+            match_correct_frame_no
+        )
 
         drift = np.linalg.norm(estimated_position - tracked_object.position[-1])
 
@@ -730,7 +766,7 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
 
     if len(mismatched_instances) == 0:
         print("Didnt find any mismatches")
-    
+
     cost_matrix = np.zeros((len(mismatched_instances), len(mismatched_instances)))
 
     for i, row_obj in enumerate(mismatched_instances):
@@ -740,14 +776,16 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
             elif row_obj.type != col_obj.type:
                 cost_matrix[i, j] = cost_threshold
             else:
-                cost_matrix[i, j] = np.linalg.norm(row_obj.position[-1] - col_obj.position[-1])
+                cost_matrix[i, j] = np.linalg.norm(
+                    row_obj.position[-1] - col_obj.position[-1]
+                )
 
     print("mismatches cost matrix")
     print(cost_matrix)
-    
+
     if len(mismatched_instances) <= 1:
         return
-    
+
     row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
     print(f"rows: {row_indices}")
@@ -759,7 +797,9 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
 
     for row, col in zip(row_indices, col_indices):
         matches.append((row, col))
-        matches_decoded.append((mismatched_instances[row].id, mismatched_instances[col].id))
+        matches_decoded.append(
+            (mismatched_instances[row].id, mismatched_instances[col].id)
+        )
         costs.append(cost_matrix[row, col])
 
     print(f"matches: {matches}")
@@ -768,12 +808,16 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
     remached_instances = set()  # Use a set for faster lookup
     for cost, (match_id_1, match_id_2) in zip(costs, matches_decoded):
         print(f"rematched: {remached_instances}")
-        
+
         # Skip if either match ID is already processed or the cost is too high
-        if match_id_1 in remached_instances or match_id_2 in remached_instances or cost >= cost_threshold:
+        if (
+            match_id_1 in remached_instances
+            or match_id_2 in remached_instances
+            or cost >= cost_threshold
+        ):
             print(f"rematched discarded: {match_id_1},{match_id_2}")
             continue
-        
+
         # Ensure both match IDs are valid
         if match_id_1 is not None and match_id_2 is not None:
             try:
@@ -782,23 +826,25 @@ def correct_matches(object_container, match_correct_frame_no, drift_threshold, c
 
                 # print(f"obj1 {match_id_1} og positions: {object_container[match_id_1].position}")
                 # print(f"obj2 {match_id_2} og positions: {object_container[match_id_2].position}")
-                
+
                 # Update states
-                object_container[match_id_1].update_state_rematch(object_container[match_id_2])
+                object_container[match_id_1].update_state_rematch(
+                    object_container[match_id_2]
+                )
                 object_container[match_id_2].update_state_rematch(object_buffer)
                 # object_container[match_id_1].update_state(object_container[match_id_2])
                 # object_container[match_id_2].update_state(object_buffer)
 
                 # print(f"obj1 {match_id_1} NEW positions: {object_container[match_id_1].position}")
                 # print(f"obj2 {match_id_2} NEW positions: {object_container[match_id_2].position}")
-                
+
                 # Mark both IDs as processed
                 remached_instances.add(match_id_1)
                 remached_instances.add(match_id_2)
-                
+
                 # print(f"Rematched objects: {match_id_1} and {match_id_2}")
                 # print(f"Cost: {cost}")
-            
+
             except KeyError:
                 print(f"Warning: Invalid object IDs - {match_id_1}, {match_id_2}")
             except Exception as e:
@@ -823,8 +869,9 @@ def filter_false_matches(
         row = int(row)
         col = int(col)
 
-        #if the matched object has been untracked before increase tolerance
-        if row_ids[row]: cost_threshold += 0.1
+        # if the matched object has been untracked before increase tolerance
+        if row_ids[row]:
+            cost_threshold += 0.1
 
         if cost_matrix[row, col] < cost_threshold:
             matches.append((row, col))
@@ -846,7 +893,7 @@ def get_masked_image(frame, detection_output):
     ):
         bbox_obj = BoundingBox(*bbox)
 
-        mask[bbox_obj.top: bbox_obj.bottom, bbox_obj.left: bbox_obj.right] = 255
+        mask[bbox_obj.top : bbox_obj.bottom, bbox_obj.left : bbox_obj.right] = 255
 
     masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
@@ -854,7 +901,6 @@ def get_masked_image(frame, detection_output):
 
 
 def draw_bounding_boxes(frame, detection_output):
-
     for id, [bbox, obj_type] in enumerate(
         zip(detection_output.boxes.xyxy, detection_output.boxes.cls)
     ):
@@ -874,7 +920,6 @@ def draw_bounding_boxes(frame, detection_output):
 
 
 def combine_frames(frames):
-
     # Split the list of frames into two columns
     mid_index = (len(frames) + 1) // 2  # Handle odd number of frames
     column1 = frames[:mid_index]
@@ -900,12 +945,11 @@ def visualize_matched_objects(
     prev_frame, frame, tracked_objects, detected_objects, matches
 ):
     # Create a frame twice the height of the original
-    split_frame = np.zeros(
-        (frame.shape[0] * 2, frame.shape[1], 3), dtype=np.uint8)
+    split_frame = np.zeros((frame.shape[0] * 2, frame.shape[1], 3), dtype=np.uint8)
 
     # Copy the original frame to the top half
     split_frame[: frame.shape[0], :, :] = prev_frame.copy()
-    split_frame[frame.shape[0]:, :, :] = frame.copy()
+    split_frame[frame.shape[0] :, :, :] = frame.copy()
 
     # Top frame - tracked objects
     for obj in tracked_objects.values():
@@ -1038,15 +1082,13 @@ def main():
 
         frame_1 = get_frame(current_frame_number, sequence_number, 2)
 
-        detection_output = get_detection_results(
-            current_frame_number, sequence_number)
+        detection_output = get_detection_results(current_frame_number, sequence_number)
 
         detected_objects = detect_objects(frame_1, detection_output)
 
         # frame_with_tracked_objects = visualize_objects(frame_1, object_container)
 
-        object_container, matches = match_objects(
-            detected_objects, object_container)
+        object_container, matches = match_objects(detected_objects, object_container)
 
         # frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
 
@@ -1068,10 +1110,8 @@ def main():
         # cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
         # cv2.imshow("Frame with combined_frames", combined_frames)
 
-        cv2.namedWindow("Frame with frame_with_matched_objects",
-                        cv2.WINDOW_NORMAL)
-        cv2.imshow("Frame with frame_with_matched_objects",
-                   frame_with_matched_objects)
+        cv2.namedWindow("Frame with frame_with_matched_objects", cv2.WINDOW_NORMAL)
+        cv2.imshow("Frame with frame_with_matched_objects", frame_with_matched_objects)
 
         # Wait for key press
         key = cv2.waitKey(0) & 0xFF
