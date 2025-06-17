@@ -242,13 +242,13 @@ class ObjectVisualizer:
                     )
 
                     if obj.type == 2:
-                        icon = mpimg.imread('car_2.png') 
+                        icon = mpimg.imread('visualization_icons/car_2.png') 
                         image_box = OffsetImage(icon, zoom=0.001)
                     elif obj.type == 1:
-                        icon = mpimg.imread('bike.png')
+                        icon = mpimg.imread('visualization_icons/bike.png')
                         image_box = OffsetImage(icon, zoom=0.03)
                     else:
-                        icon = mpimg.imread('person.png')
+                        icon = mpimg.imread('visualization_icons/person.png')
                         image_box = OffsetImage(icon, zoom=0.03)
                         
                     image_box = OffsetImage(icon, zoom=0.03)
