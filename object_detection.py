@@ -1,18 +1,19 @@
-from PIL import Image
 import os
+from typing import List, Tuple
 
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-
 from ultralytics import YOLO
-
-from typing import List, Tuple
 
 
 class ImageDataset(Dataset):
     """Custom dataset for loading image sequences with numeric sorting from left and right cameras."""
-    def __init__(self, left_img_directory: str, right_img_directory: str, transform=None):
+
+    def __init__(
+        self, left_img_directory: str, right_img_directory: str, transform=None
+    ):
         self.left_img_directory = left_img_directory
         self.right_img_directory = right_img_directory
         self.left_image_paths, self.right_image_paths = self._get_sorted_image_paths()
@@ -20,15 +21,17 @@ class ImageDataset(Dataset):
 
     def _get_sorted_image_paths(self) -> Tuple[List[str], List[str]]:
         """Retrieve and numerically sort image paths from both directories."""
-        valid_extensions = ('png', 'jpg', 'jpeg')
-        
+        valid_extensions = ("png", "jpg", "jpeg")
+
         # Get sorted paths for the left camera
         left_paths = [
             os.path.join(self.left_img_directory, f)
             for f in os.listdir(self.left_img_directory)
             if f.endswith(valid_extensions)
         ]
-        left_paths = sorted(left_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
+        left_paths = sorted(
+            left_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+        )
 
         # Get sorted paths for the right camera
         right_paths = [
@@ -36,11 +39,15 @@ class ImageDataset(Dataset):
             for f in os.listdir(self.right_img_directory)
             if f.endswith(valid_extensions)
         ]
-        right_paths = sorted(right_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
+        right_paths = sorted(
+            right_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+        )
 
         # Ensure the number of images matches and filenames align
         if len(left_paths) != len(right_paths):
-            raise ValueError("Number of images in left and right directories do not match.")
+            raise ValueError(
+                "Number of images in left and right directories do not match."
+            )
 
         left_basenames = [os.path.basename(f) for f in left_paths]
         right_basenames = [os.path.basename(f) for f in right_paths]
@@ -66,13 +73,22 @@ class ImageDataset(Dataset):
             left_image = self.transform(left_image)
             right_image = self.transform(right_image)
 
-        return left_image, right_image, left_raw_img, right_raw_img, left_img_path, right_img_path
+        return (
+            left_image,
+            right_image,
+            left_raw_img,
+            right_raw_img,
+            left_img_path,
+            right_img_path,
+        )
+
 
 class ObjectDetector:
     """Manages object detection using YOLO model."""
+
     def __init__(self, sequence_number: int = 3):
         self.sequence_number = sequence_number
-        
+
         self.frames_dir = {
             (1, 2): "data/34759_final_project_rect/seq_01/image_02/data",
             (1, 3): "data/34759_final_project_rect/seq_01/image_03/data",
@@ -88,20 +104,24 @@ class ObjectDetector:
         print(f"Running on {'GPU' if torch.cuda.is_available() else 'CPU'}.")
 
         self.transform = transforms.Compose([transforms.ToTensor()])
-        self.dataset = ImageDataset(self.left_image_dir, self.right_image_dir, transform=self.transform)
+        self.dataset = ImageDataset(
+            self.left_image_dir, self.right_image_dir, transform=self.transform
+        )
         self.dataloader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
-        model_path = "/home/moskit/dtu/stereo_3d_tracking/job2/runs/detect/train/weights/best.pt"
+        model_path = (
+            "/home/moskit/dtu/stereo_3d_tracking/job2/runs/detect/train/weights/best.pt"
+        )
         self.model = YOLO(model_path).to(self.device)
         self.model.eval()
 
     def detect_objects(self, image_path: str) -> List:
         """Perform object detection on an image."""
         return self.model.predict(
-            task='detect',
+            task="detect",
             conf=0.4,
             source=image_path,
             imgsz=640,
             save=False,
-            save_txt=False
+            save_txt=False,
         )
