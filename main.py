@@ -1,31 +1,32 @@
-import numpy as np
-import cv2
-from typing import List, Tuple
-from tqdm import tqdm
+import os
 import pickle
 
-from feature_manager import *
+import cv2
+import numpy as np
+from tqdm import tqdm
 
-from object_detection import *
-from depth_image_manager import *
-
-from visualization_3d import *
+import feature_manager
+from depth_image_manager import DepthManager
+from object_detection import ObjectDetector
+from visualization_3d import ObjectVisualizer
 
 
 class ObjectTracker:
     """Manages object tracking across video frames."""
-    def __init__(self, 
-                 sequence_number: int = 3, 
-                 save_detections: bool = False, 
-                 load_detections: bool = False, 
-                 save_tracking: bool = False,
-                 enable_tracking: bool = True,
-                 detections_dir='results/detections', 
-                 tracking_dir='results/tracking'):
+
+    def __init__(
+        self,
+        sequence_number: int = 3,
+        save_detections: bool = False,
+        load_detections: bool = False,
+        save_tracking: bool = False,
+        enable_tracking: bool = True,
+        detections_dir="results/detections",
+        tracking_dir="results/tracking",
+    ):
         self.sequence_number = sequence_number
         self.object_detector = ObjectDetector(sequence_number)
         self.depth_manager = DepthManager()
-        # self.visualizer = ObjectVisualizer()
         self.object_container = {}
         self.previous_frame = None
         self.frame_number = 0
@@ -44,13 +45,14 @@ class ObjectTracker:
         self.enable_tracking = enable_tracking
 
         self.visualizer = ObjectVisualizer(
-                                            display_plots={
-            'main_4subplot': False,
-            '3d_separate': False,
-            'xy_separate': False,
-            'xz_separate': True,
-            'yx_separate': False
-        })
+            display_plots={
+                "main_4subplot": False,
+                "3d_separate": False,
+                "xy_separate": False,
+                "xz_separate": True,
+                "yx_separate": False,
+            }
+        )
 
     def process_frame(self, image, raw_image, path) -> None:
         """Process a single frame for object detection and tracking."""
@@ -62,11 +64,14 @@ class ObjectTracker:
 
         if self.load_detections:
             try:
-                detection_path = self.detections_dir + f'/seq{self.sequence_number}/frame_{self.frame_number}_detection.pkl'
+                detection_path = (
+                    self.detections_dir
+                    + f"/seq{self.sequence_number}/frame_{self.frame_number}_detection.pkl"
+                )
                 if not os.path.exists(detection_path):
                     raise FileNotFoundError(f"Pickle file not found: {detection_path}")
-                
-                with open(detection_path, 'rb') as f:
+
+                with open(detection_path, "rb") as f:
                     detection_outputs = pickle.load(f)
             except (pickle.UnpicklingError, EOFError) as e:
                 print(f"Error loading pickle file: {e}")
@@ -75,46 +80,68 @@ class ObjectTracker:
             detection_outputs = self.object_detector.detect_objects(path)
 
         if self.enable_tracking:
-
             for detection_output in detection_outputs:
+                detected_objects = feature_manager.detect_objects_yolo(
+                    raw_image, detection_output, self.depth_manager
+                )
 
-                detected_objects = detect_objects_yolo(raw_image, detection_output, self.depth_manager)
-
-                detected_objects = apply_nms(detected_objects, 0.5)
+                detected_objects = feature_manager.apply_nms(detected_objects, 0.5)
 
                 # Track objects
-                frame_with_tracked_objects = visualize_objects(self.previous_frame.copy(), self.object_container, self.rematching_frame_no)
-                self.object_container, matches, matches_decoded = match_objects(detected_objects, self.object_container, self.depth_manager)
+                frame_with_tracked_objects = feature_manager.visualize_objects(
+                    self.previous_frame.copy(),
+                    self.object_container,
+                    self.rematching_frame_no,
+                )
+                self.object_container, matches, matches_decoded = (
+                    feature_manager.match_objects(
+                        detected_objects, self.object_container, self.depth_manager
+                    )
+                )
 
                 if self.frame_number % self.rematching_freq == 0:
-                    correct_matches(self.object_container, self.rematching_frame_no, self.drift_threshold, self.rematch_cost_threshold)
+                    feature_manager.correct_matches(
+                        self.object_container,
+                        self.rematching_frame_no,
+                        self.drift_threshold,
+                        self.rematch_cost_threshold,
+                    )
 
                 # Visualization
-                # frame_with_detected_objects = visualize_objects(raw_image, detected_objects)
-                frame_with_matched_objects = visualize_matched_objects(self.previous_frame.copy(), raw_image, self.object_container, detected_objects, matches_decoded)
-                masked_frame = get_masked_image(raw_image, detection_output)
-                bbox_frame = draw_bounding_boxes(raw_image, detection_output)
+                frame_with_matched_objects = feature_manager.visualize_matched_objects(
+                    self.previous_frame.copy(),
+                    raw_image,
+                    self.object_container,
+                    detected_objects,
+                    matches_decoded,
+                )
+                masked_frame = feature_manager.get_masked_image(
+                    raw_image, detection_output
+                )
+                bbox_frame = feature_manager.draw_bounding_boxes(
+                    raw_image, detection_output
+                )
 
                 self.object_container = {
-                    id: obj for id, obj in self.object_container.items() 
-                    if (0 < obj.kalman_pred_position[-1][0] < self.image_width and 
-                        0 < obj.kalman_pred_position[-1][1] < self.image_height)
+                    id: obj
+                    for id, obj in self.object_container.items()
+                    if (
+                        0 < obj.kalman_pred_position[-1][0] < self.image_width
+                        and 0 < obj.kalman_pred_position[-1][1] < self.image_height
+                    )
                 }
 
-                # for obj in self.object_container.values():
-                #     obj.position_3d.append(self.depth_manager.position_img_2d_to_world_3d(obj.kalman_position[-1]))
                 for obj in self.object_container.values():
                     if obj.id == 0 or obj.id == 14:
-                        print(f"ID: {obj.id}, Kalman Position: {obj.kalman_position[-5:]}, Kalman Velocity: {obj.kalman_velocity[-5:]}")
-                
+                        print(
+                            f"ID: {obj.id}, Kalman Position: {obj.kalman_position[-5:]}, Kalman Velocity: {obj.kalman_velocity[-5:]}"
+                        )
+
                 self.visualizer.render(self.object_container)
 
-                combined_frames = combine_frames([
-                    frame_with_tracked_objects, 
-                    # frame_with_detected_objqects, 
-                    masked_frame,
-                    bbox_frame
-                ])
+                combined_frames = feature_manager.combine_frames(
+                    [frame_with_tracked_objects, masked_frame, bbox_frame]
+                )
 
         return combined_frames, frame_with_matched_objects, detection_outputs
 
@@ -125,32 +152,42 @@ class ObjectTracker:
         raw_image = cv2.cvtColor(raw_image, cv2.COLOR_RGB2BGR)
         return raw_image
 
-
     def run(self):
         """Run object tracking on all frames."""
 
         auto_play = False
 
-        for left_image, right_image, left_raw_img, right_raw_img, left_img_path, right_img_path in tqdm(self.object_detector.dataloader):
-
+        for (
+            left_image,
+            right_image,
+            left_raw_img,
+            right_raw_img,
+            left_img_path,
+            right_img_path,
+        ) in tqdm(self.object_detector.dataloader):
             left_raw_img = self.process_raw_image(left_raw_img)
             right_raw_img = self.process_raw_image(right_raw_img)
 
             if self.previous_frame is None:
                 self.previous_frame = left_raw_img.copy()
 
-            # disparity = self.depth_manager.get_disparity_map(left_raw_img, right_raw_img)
             self.depth_manager.update_disparity_map(left_raw_img, right_raw_img)
 
-            combined_frames, frame_with_matched_objects, detection_outputs = self.process_frame(left_image, left_raw_img.copy(), left_img_path)
+            combined_frames, frame_with_matched_objects, detection_outputs = (
+                self.process_frame(left_image, left_raw_img.copy(), left_img_path)
+            )
 
             if self.save_detections:
-                pickle_dir = os.path.join(self.detections_dir, f'seq{self.sequence_number}')
+                pickle_dir = os.path.join(
+                    self.detections_dir, f"seq{self.sequence_number}"
+                )
                 os.makedirs(pickle_dir, exist_ok=True)
-                
-                pickle_path = os.path.join(pickle_dir, f'frame_{self.frame_number}_detection.pkl')
-                
-                with open(pickle_path, 'wb') as f:
+
+                pickle_path = os.path.join(
+                    pickle_dir, f"frame_{self.frame_number}_detection.pkl"
+                )
+
+                with open(pickle_path, "wb") as f:
                     pickle.dump(detection_outputs, f)
 
             if self.enable_tracking:
@@ -159,9 +196,11 @@ class ObjectTracker:
 
                 cv2.namedWindow("Frame with matched objects", cv2.WINDOW_NORMAL)
                 cv2.imshow("Frame with matched objects", frame_with_matched_objects)
-            
+
             for obj in self.object_container.values():
-                print(f"ID: {obj.id}, 2d kal. pos. {obj.kalman_position[-1]}, 3d pos. {obj.position_3d[-3:]}, 3D-2D pos. {self.depth_manager.world_3d_to_img_2D(obj.position_3d[-1].astype(int))}")
+                print(
+                    f"ID: {obj.id}, 2d kal. pos. {obj.kalman_position[-1]}, 3d pos. {obj.position_3d[-3:]}, 3D-2D pos. {self.depth_manager.world_3d_to_img_2D(obj.position_3d[-1].astype(int))}"
+                )
 
             # cv2.imshow('Disparity Map', disparity)
 
@@ -177,35 +216,30 @@ class ObjectTracker:
                 key = cv2.waitKey(0) & 0xFF
 
             # Toggle auto-play mode
-            if key == ord(' '):  # Spacebar toggles auto-play
+            if key == ord(" "):  # Spacebar toggles auto-play
                 auto_play = not auto_play
                 print(f"Auto-play {'enabled' if auto_play else 'disabled'}")
 
             # Exit on 'q'
-            if key == ord('q'):  
+            if key == ord("q"):
                 self.visualizer.close()
                 break
 
             # Optional: Add frame navigation when not in auto-play
             if not auto_play:
-                if key == ord('n'):  # Next frame
+                if key == ord("n"):  # Next frame
                     continue
-                elif key == ord('p'):  # Previous frame (reset frame number)
+                elif key == ord("p"):  # Previous frame (reset frame number)
                     self.frame_number = max(0, self.frame_number - 2)
 
 
 def main():
     sequence_number = 3
-    tracker = ObjectTracker(sequence_number=sequence_number, load_detections=True, enable_tracking=True)
+    tracker = ObjectTracker(
+        sequence_number=sequence_number, load_detections=True, enable_tracking=True
+    )
     tracker.run()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-
-
-# self.save_detections = save_detections
-# self.load_detections = load_detections
-# self.detections_dir = detections_dir
-# self.save_tracking = save_tracking
-# self.tracking_dir = tracking_dir
-# self.enable_tracking = enable_tracking
