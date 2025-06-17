@@ -4,7 +4,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 import pickle
 
-from feature_manager_v2 import *
+from feature_manager import *
 
 from object_detection import *
 from depth_image_manager import *
