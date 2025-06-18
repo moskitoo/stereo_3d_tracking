@@ -10,7 +10,6 @@ import torch
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics.pairwise import cosine_similarity
 
-# from frame_manager import *
 import frame_manager
 from kalman_filter import KalmanTracker
 
@@ -413,9 +412,6 @@ def IOU(box1, box2):
 def get_cost_matrix(
     detected_objects,
     object_container,
-    pos_w=0.006,
-    bbox_area_w=0.4,
-    bbox_shape_w=0.2,
     iou_w=1.0,
     feat_w=0.1,
     kalman_vector_w=1.0,
@@ -528,8 +524,6 @@ def get_cost_matrix(
             cost_matrix[i, j] = total_cost
 
             # Store detailed costs including total cost
-            # detailed_cost = [iou_w * iou_cost, feat_w * feat_cost, class_cost, total_cost]
-            # detailed_cost_not_scaled = [iou_cost, feat_cost, class_cost, total_cost]
             detailed_cost_basic = [
                 iou_w * iou_cost,
                 feat_w * feat_cost,
@@ -569,11 +563,6 @@ def get_cost_matrix(
     )
 
     print(f"Current frame number: {current_frame_number}")
-    # print(pd.DataFrame(cost_matrix_detailed[0]))
-    # print(pd.DataFrame(cost_matrix_detailed[1]))
-    # print(pd.DataFrame(cost_matrix_detailed_not_scaled[0]))
-    # print(pd.DataFrame(cost_matrix_detailed_not_scaled[1]))
-    # print(pd.DataFrame(cost_matrix_basic[0]))
 
     cost_matrix_storage.append(
         {
