@@ -1,4 +1,5 @@
 import copy
+import os
 import random
 from datetime import datetime
 
@@ -9,7 +10,8 @@ import torch
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics.pairwise import cosine_similarity
 
-from frame_manager import *
+# from frame_manager import *
+import frame_manager
 from kalman_filter import KalmanTracker
 
 id_counter = 0
@@ -315,7 +317,7 @@ def get_rand_color():
 
 
 def get_detection_results(frame_number, seq_num):
-    seq_labels = labels[seq_num]
+    seq_labels = frame_manager.labels[seq_num]
     frame_labels = seq_labels[seq_labels["frame"] == frame_number]
 
     # Extract columns 'bbox_left', 'bbox_top', 'bbox_right', 'bbox_bottom' as a NumPy array
@@ -472,7 +474,7 @@ def get_cost_matrix(
             pos_cost = np.linalg.norm(
                 tracked_object.position[0] - detected_object.position[0]
             )
-            pos_cost_normalized = pos_cost / max_pos_cost if max_pos_cost > 0 else 0
+            # pos_cost_normalized = pos_cost / max_pos_cost if max_pos_cost > 0 else 0
 
             # Bbox area cost (normalized)
             det_obj_area = detected_object.bbox.get_bbox_area()
@@ -480,15 +482,15 @@ def get_cost_matrix(
             bbox_area_cost = abs(tracked_obj_area - det_obj_area) / max(
                 det_obj_area, tracked_obj_area
             )
-            bbox_area_cost_normalized = (
-                bbox_area_cost / max_bbox_area_cost if max_bbox_area_cost > 0 else 0
-            )
+            # bbox_area_cost_normalized = (
+            #     bbox_area_cost / max_bbox_area_cost if max_bbox_area_cost > 0 else 0
+            # )
 
             # Bbox shape cost
-            shape_cost = abs(
-                tracked_object.bbox.get_bbox_aspect_ratio()
-                - detected_object.bbox.get_bbox_aspect_ratio()
-            )
+            # shape_cost = abs(
+            #     tracked_object.bbox.get_bbox_aspect_ratio()
+            #     - detected_object.bbox.get_bbox_aspect_ratio()
+            # )
 
             # IoU cost
             iou_cost = 1 - IOU(tracked_object.bbox, detected_object.bbox)
@@ -600,7 +602,6 @@ def match_objects(
     # State 1: If no objects exist, create the first one
     if not object_container:
         for container_id, detected_object in detected_objects.items():
-            container_id = id_counter
             detected_object.id = id_counter
             id_counter += 1
         object_container = detected_objects
@@ -1008,75 +1009,3 @@ def save_cost_matrices():
 
     # Clear storage after saving
     cost_matrix_storage.clear()
-
-
-def main():
-    global object_container
-    global current_frame_number
-
-    frame_start = 1  # Start frame number
-
-    frame_end = 140  # End frame number
-    sequence_number = 1  # Sequence number
-
-    object_container = []
-    current_frame_number = frame_start
-
-    while True:
-        print(f"frame number: {current_frame_number}")
-
-        frame_1 = get_frame(current_frame_number, sequence_number, 2)
-
-        detection_output = get_detection_results(current_frame_number, sequence_number)
-
-        detected_objects = detect_objects(frame_1, detection_output)
-
-        # frame_with_tracked_objects = visualize_objects(frame_1, object_container)
-
-        object_container, matches = match_objects(detected_objects, object_container)
-
-        # frame_with_detected_objects = visualize_objects(frame_1, detected_objects)
-
-        frame_with_matched_objects = visualize_matched_objects(
-            frame_1, object_container, detected_objects, matches
-        )
-
-        # masked_frame_1 = get_masked_image(frame_1, detection_output)
-        # bbox_frame = draw_bounding_boxes(frame_1, detection_output)
-
-        # combined_frames = combine_frames([frame_with_tracked_objects, frame_with_detected_objects, masked_frame_1, bbox_frame])
-
-        print("\n\n")
-
-        # Display current frame number
-        # cv2.putText(combined_frames, f"Frame: {current_frame_number}", (10, 30),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
-        # cv2.namedWindow("Frame with combined_frames", cv2.WINDOW_NORMAL)
-        # cv2.imshow("Frame with combined_frames", combined_frames)
-
-        cv2.namedWindow("Frame with frame_with_matched_objects", cv2.WINDOW_NORMAL)
-        cv2.imshow("Frame with frame_with_matched_objects", frame_with_matched_objects)
-
-        # Wait for key press
-        key = cv2.waitKey(0) & 0xFF
-
-        if key == ord("q"):  # Quit
-            break
-        elif key == 81:  # Left arrow key
-            current_frame_number = max(frame_start, current_frame_number - 1)
-        elif key == 83:  # Right arrow key
-            current_frame_number = min(frame_end, current_frame_number + 1)
-        elif key == ord("a"):  # Go back multiple frames
-            current_frame_number = max(frame_start, current_frame_number - 3)
-        elif key == ord("d"):  # Go forward multiple frames
-            current_frame_number = min(frame_end, current_frame_number + 3)
-
-    save_cost_matrices()
-
-    # Close all windows
-    cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
